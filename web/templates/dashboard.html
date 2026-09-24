@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Runs · Decision Bench{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="eyebrow">Workbench</p>
+    <h1>Decisions you can trace.</h1>
+  </div>
+  <a class="button" href="/bots/new">Create a bot</a>
+</header>
+<section class="grid stats">
+  <article>
+    <p class="label">Bots</p>
+    <strong>{{ bots|length }}</strong>
+  </article>
+  <article>
+    <p class="label">Root runs</p>
+    <strong>{{ runs|length }}</strong>
+  </article>
+  <article>
+    <p class="label">Latest eval</p>
+    <strong>
+      {% if evals %}{{ evals[0].pass_count }}/{{ evals[0].case_count }}{% else %}—{% endif %}
+    </strong>
+  </article>
+</section>
+<section class="panel">
+  <div class="panel-head">
+    <h2>Recent runs</h2>
+    <a href="/evals">Score a gold set</a>
+  </div>
+  {% if runs %}
+  <table>
+    <thead>
+      <tr><th>Bot</th><th>Provider</th><th>Status</th><th>Score</th><th>Latency</th></tr>
+    </thead>
+    <tbody>
+      {% for run in runs %}
+      <tr>
+        <td><a href="/runs/{{ run.id }}">{{ bot_names.get(run.bot_id, run.bot_id) }}</a></td>
+        <td>{{ run.provider }}</td>
+        <td><span class="pill {{ run.status }}">{{ run.status }}</span></td>
+        <td>{{ run.score }}</td>
+        <td>{{ run.latency_ms }} ms</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">No runs yet. Open a lead bot and paste a diff or an incident.</p>
+  {% endif %}
+</section>
+<section class="grid two">
+  {% for bot in bots %}
+  {% if bot.id in ['change-lead', 'incident-lead'] %}
+  <article class="panel">
+    <p class="label">Lead bot</p>
+    <h2><a href="/bots/{{ bot.id }}">{{ bot.name }}</a></h2>
+    <p>{{ bot.summary }}</p>
+  </article>
+  {% endif %}
+  {% endfor %}
+</section>
+{% endblock %}

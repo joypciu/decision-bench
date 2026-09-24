@@ -1,0 +1,40 @@
+id: incident_triage
+name: Incident triage
+description: Read an incident report and return severity, missing facts, and the next checks.
+output_schema:
+  type: object
+  additionalProperties: false
+  required: [severity, summary, gaps, next_checks]
+  properties:
+    severity:
+      type: string
+      enum: [sev1, sev2, sev3]
+    summary:
+      type: string
+    gaps:
+      type: array
+      items:
+        type: string
+    next_checks:
+      type: array
+      items:
+        type: string
+cases:
+  - id: orders-outage
+    title: Orders outage
+    expect_min_children: 1
+    expected:
+      severity: sev1
+      must_mention:
+        - outage
+    input: |
+      Production API outage. All users are affected and there is data loss in orders since 02:10 UTC.
+  - id: single-analyst
+    title: Single analyst chart
+    expect_min_children: 1
+    expected:
+      severity: sev3
+      must_mention:
+        - analyst
+    input: |
+      The analytics chart on one internal dashboard is slow for a single analyst. No other workflow is involved.

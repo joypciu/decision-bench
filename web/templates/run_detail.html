@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Run · Decision Bench{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="eyebrow">{{ node.bot_name }} · {{ node.run.provider }}</p>
+    <h1>{{ node.run.status }} · score {{ node.run.score }}</h1>
+    <p class="lede">{{ node.run.latency_ms }} ms · {{ node.run.prompt_tokens + node.run.completion_tokens }} tokens</p>
+  </div>
+  <span class="pill {{ 'pass' if node.run.passed else 'fail' }}">{% if node.run.passed %}passed{% else %}not passed{% endif %}</span>
+</header>
+{% if node.run.error %}<p class="banner">{{ node.run.error }}</p>{% endif %}
+<section class="grid two">
+  <article class="panel">
+    <h2>Trace</h2>
+    {% macro tree(item) %}
+    <article class="node">
+      <header>
+        <strong>{{ item.bot_name }}</strong>
+        <span class="pill {{ item.run.status }}">{{ item.run.status }}</span>
+        <span>{{ item.run.score }}</span>
+      </header>
+      {% if item.run.output %}
+      <pre>{{ item.run.output | pretty }}</pre>
+      {% endif %}
+      {% if item.children %}
+      <div class="children">
+        {% for child in item.children %}{{ tree(child) }}{% endfor %}
+      </div>
+      {% endif %}
+    </article>
+    {% endmacro %}
+    {{ tree(node) }}
+  </article>
+  <div class="stack">
+    <article class="panel">
+      <h2>Checks</h2>
+      <ul class="checks">
+        {% for check in node.run.checks %}
+        <li>
+          <span class="pill {{ 'pass' if check.passed else 'fail' }}">{{ check.name }}</span>
+          <span>{{ check.detail }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+    </article>
+    <article class="panel">
+      <h2>Steps</h2>
+      <ol class="steps">
+        {% for step in node.steps %}
+        <li>
+          <span class="label">{{ step.kind }}{% if step.name %} · {{ step.name }}{% endif %}</span>
+          <pre>{{ step.payload | pretty }}</pre>
+        </li>
+        {% endfor %}
+      </ol>
+    </article>
+    <article class="panel">
+      <h2>Input</h2>
+      <pre class="case">{{ node.run.input_text }}</pre>
+    </article>
+  </div>
+</section>
+{% endblock %}

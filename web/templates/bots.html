@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Bots · Decision Bench{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="eyebrow">Bots</p>
+    <h1>Workers you can version.</h1>
+  </div>
+  <a class="button" href="/bots/new">Create a bot</a>
+</header>
+<section class="stack">
+  {% for row in rows %}
+  <article class="panel bot-row">
+    <div>
+      <h2><a href="/bots/{{ row.bot.id }}">{{ row.bot.name }}</a></h2>
+      <p>{{ row.bot.summary }}</p>
+    </div>
+    {% if row.version %}
+    <dl class="meta">
+      <div><dt>Version</dt><dd>{{ row.version.version }}</dd></div>
+      <div><dt>Provider</dt><dd>{{ row.version.provider }}</dd></div>
+      <div><dt>Spawns</dt><dd>{{ row.version.allowed_bot_ids|join(", ") or "—" }}</dd></div>
+    </dl>
+    {% endif %}
+  </article>
+  {% endfor %}
+</section>
+{% endblock %}

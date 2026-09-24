@@ -1,0 +1,58 @@
+id: change_risk
+name: Change-risk review
+description: Read a diff and return ship, revise, or block, with a file-level risk list.
+output_schema:
+  type: object
+  additionalProperties: false
+  required: [verdict, summary, risks]
+  properties:
+    verdict:
+      type: string
+      enum: [ship, revise, block]
+    summary:
+      type: string
+    risks:
+      type: array
+      items:
+        type: object
+        additionalProperties: false
+        required: [severity, file, reason]
+        properties:
+          severity:
+            type: string
+            enum: [low, medium, high]
+          file:
+            type: string
+          reason:
+            type: string
+cases:
+  - id: auth-bypass
+    title: Auth check removed
+    expect_min_children: 1
+    expected:
+      verdict: block
+      must_mention:
+        - auth
+    input: |
+      diff --git a/auth.py b/auth.py
+      --- a/auth.py
+      +++ b/auth.py
+      @@ -4,7 +4,7 @@ def allow(user):
+      -    if user.is_authenticated:
+      +    if True:  # bypass auth
+               return True
+           return False
+  - id: readme-wording
+    title: Readme wording
+    expect_min_children: 1
+    expected:
+      verdict: ship
+      must_mention:
+        - readme
+    input: |
+      diff --git a/README.md b/README.md
+      --- a/README.md
+      +++ b/README.md
+      @@ -1 +1 @@
+      -Hello
+      +Hello there

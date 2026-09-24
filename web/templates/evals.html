@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Evals · Decision Bench{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="eyebrow">Evals</p>
+    <h1>Same cases. Different providers.</h1>
+  </div>
+</header>
+{% if error %}<p class="banner">{{ error }}</p>{% endif %}
+<form class="panel form" method="post" action="/evals">
+  <div class="split three">
+    <label>
+      <span>Bot</span>
+      <select name="bot_id">
+        {% for bot in bots %}
+        <option value="{{ bot.id }}">{{ bot.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      <span>Pack</span>
+      <select name="pack_id">
+        {% for pack in packs.values() %}
+        <option value="{{ pack.id }}">{{ pack.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      <span>Provider</span>
+      <select name="provider">
+        {% for provider in provider_rows %}
+        <option value="{{ provider.name }}">{{ provider.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+  </div>
+  <label>
+    <span>Model override</span>
+    <input name="model" placeholder="blank uses the provider default">
+  </label>
+  <button class="button" type="submit">Run gold set</button>
+</form>
+{% if selected %}
+<section class="panel">
+  <div class="panel-head">
+    <h2>{{ bot_names.get(selected.bot_id, selected.bot_id) }} · {{ selected.provider }}</h2>
+    <strong>{{ selected.pass_count }}/{{ selected.case_count }} passed</strong>
+  </div>
+  <p class="lede">{{ selected.avg_latency_ms }} ms average · {{ selected.total_tokens }} tokens · {{ selected.model }}</p>
+  <table>
+    <thead>
+      <tr><th>Case</th><th>Result</th><th>Score</th><th>Latency</th></tr>
+    </thead>
+    <tbody>
+      {% for item in selected.results %}
+      <tr>
+        <td><a href="/runs/{{ item.run_id }}">{{ item.title }}</a></td>
+        <td><span class="pill {{ 'pass' if item.passed else 'fail' }}">{% if item.passed %}passed{% else %}failed{% endif %}</span></td>
+        <td>{{ item.score }}</td>
+        <td>{{ item.latency_ms }} ms</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+<section class="panel">
+  <h2>History</h2>
+  {% if evals %}
+  <table>
+    <thead>
+      <tr><th>When</th><th>Bot</th><th>Pack</th><th>Provider</th><th>Passed</th></tr>
+    </thead>
+    <tbody>
+      {% for item in evals %}
+      <tr>
+        <td><a href="/evals?id={{ item.id }}">{{ item.created_at }}</a></td>
+        <td>{{ bot_names.get(item.bot_id, item.bot_id) }}</td>
+        <td>{{ item.pack_id }}</td>
+        <td>{{ item.provider }}</td>
+        <td>{{ item.pass_count }}/{{ item.case_count }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">Run the change-risk or incident pack on a lead bot. The demo provider passes the checked-in cases.</p>
+  {% endif %}
+</section>
+{% endblock %}

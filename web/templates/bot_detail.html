@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}{{ bot.name }} · Decision Bench{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="eyebrow">Bot · v{{ latest.version }}</p>
+    <h1>{{ bot.name }}</h1>
+    <p class="lede">{{ bot.summary }}</p>
+  </div>
+  <a class="button ghost" href="/bots/new?from={{ bot.id }}">Clone</a>
+</header>
+{% if error %}<p class="banner">{{ error }}</p>{% endif %}
+<section class="grid two">
+  <form class="panel form" method="post" action="/runs">
+    <h2>Run this bot</h2>
+    <input type="hidden" name="bot_id" value="{{ bot.id }}">
+    <label class="wide">
+      <span>Case</span>
+      <textarea name="input" rows="10" required placeholder="Paste a diff or an incident report"></textarea>
+    </label>
+    <div class="split">
+      <label>
+        <span>Provider</span>
+        <select name="provider">
+          {% for provider in provider_rows %}
+          <option value="{{ provider.name }}" {% if latest.provider == provider.name %}selected{% endif %}>{{ provider.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>
+        <span>Model override</span>
+        <input name="model" placeholder="{{ latest.model }}">
+      </label>
+    </div>
+    <button class="button" type="submit">Run</button>
+  </form>
+  <article class="panel">
+    <h2>Current contract</h2>
+    <dl class="meta stacked">
+      <div><dt>Provider</dt><dd>{{ latest.provider }} / {{ latest.model }}</dd></div>
+      <div><dt>Pack</dt><dd>{{ latest.pack_id or "—" }}</dd></div>
+      <div><dt>Tools</dt><dd>{{ latest.allowed_tools|join(", ") }}</dd></div>
+      <div><dt>May spawn</dt><dd>{{ latest.allowed_bot_ids|join(", ") or "—" }}</dd></div>
+      <div><dt>Budget</dt><dd>{{ latest.max_steps }} steps · depth {{ latest.max_child_depth }} · {{ latest.max_tokens }} tokens</dd></div>
+    </dl>
+    <pre>{{ latest.output_schema | pretty }}</pre>
+  </article>
+</section>
+<section class="panel">
+  <h2>Versions</h2>
+  <ul class="version-list">
+    {% for version in versions %}
+    <li>v{{ version.version }} · {{ version.provider }} · {{ version.created_at }}</li>
+    {% endfor %}
+  </ul>
+</section>
+<details class="panel">
+  <summary>Save a new version</summary>
+  <form class="form" method="post" action="/bots/{{ bot.id }}/versions" id="bot-form">
+    {% set prefill = {
+      "name": bot.name,
+      "summary": bot.summary,
+      "instructions": latest.instructions,
+      "provider": latest.provider,
+      "model": latest.model,
+      "pack_id": latest.pack_id or "",
+      "output_schema": latest.output_schema,
+      "allowed_tools": latest.allowed_tools,
+      "allowed_bot_ids": latest.allowed_bot_ids,
+      "max_steps": latest.max_steps,
+      "max_child_depth": latest.max_child_depth,
+      "max_tokens": latest.max_tokens,
+      "require_delegation": latest.require_delegation
+    } %}
+    {% include "bot_fields.html" %}
+    <button class="button" type="submit">Save version</button>
+  </form>
+</details>
+<script id="pack-data" type="application/json">{{ pack_options | tojson }}</script>
+<script src="/static/app.js"></script>
+{% endblock %}

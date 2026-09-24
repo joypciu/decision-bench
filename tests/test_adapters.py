@@ -1,0 +1,99 @@
+import json
+
+import httpx
+
+from decision_bench.domain import Message, ToolSpec
+from decision_bench.providers.gemini import GeminiProvider, to_gemini_schema
+from decision_bench.providers.openrouter import OpenRouterProvider
+
+
+def test_gemini_schema_uses_api_types():
+    converted = to_gemini_schema(
+        {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["verdict"],
+            "properties": {"verdict": {"type": "string", "enum": ["ship"]}},
+        }
+    )
+    assert converted["type"] == "OBJECT"
+    assert converted["properties"]["verdict"]["type"] == "STRING"
+    assert "additionalProperties" not in converted
+
+
+def test_gemini_parses_a_function_call():
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        assert body["tools"][0]["functionDeclarations"][0]["name"] == "finish"
+        return httpx.Response(
+            200,
+            json={
+                "candidates": [
+                    {
+                        "content": {
+                            "parts": [{"functionCall": {"name": "finish", "args": {"answer": "ok"}}}]
+                        }
+                    }
+                ],
+                "usageMetadata": {"promptTokenCount": 11, "candidatesTokenCount": 4},
+            },
+        )
+
+    provider = GeminiProvider(
+        api_key="test-key",
+        base_url="https://example.test/v1beta",
+        timeout_s=5,
+        transport=httpx.MockTransport(handler),
+    )
+    completion = provider.complete(
+        model="gemini-2.5-flash",
+        messages=[Message(role="user", content="case")],
+        tools=[ToolSpec("finish", "done", {"type": "object"})],
+        schema={},
+    )
+    assert completion.tool_calls[0].arguments == {"answer": "ok"}
+    assert completion.prompt_tokens == 11
+
+
+def test_openrouter_parses_a_tool_call():
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.headers["authorization"] == "Bearer test-key"
+        assert request.url.path == "/api/v1/chat/completions"
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "message": {
+                            "content": None,
+                            "tool_calls": [
+                                {
+                                    "id": "call_1",
+                                    "type": "function",
+                                    "function": {
+                                        "name": "finish",
+                                        "arguments": json.dumps({"answer": "ok"}),
+                                    },
+                                }
+                            ],
+                        }
+                    }
+                ],
+                "usage": {"prompt_tokens": 8, "completion_tokens": 3},
+            },
+        )
+
+    provider = OpenRouterProvider(
+        api_key="test-key",
+        base_url="https://example.test/api/v1",
+        timeout_s=5,
+        transport=httpx.MockTransport(handler),
+    )
+    completion = provider.complete(
+        model="example/free",
+        messages=[Message(role="user", content="case")],
+        tools=[ToolSpec("finish", "done", {"type": "object", "properties": {}})],
+        schema={},
+    )
+    assert completion.tool_calls[0].name == "finish"
+    assert completion.tool_calls[0].arguments == {"answer": "ok"}

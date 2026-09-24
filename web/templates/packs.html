@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Packs · Decision Bench{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="eyebrow">Task packs</p>
+    <h1>The contract lives in data.</h1>
+  </div>
+</header>
+<section class="stack">
+  {% for pack in pack_list %}
+  <article class="panel">
+    <h2>{{ pack.name }}</h2>
+    <p>{{ pack.description }}</p>
+    <p class="label">{{ pack.cases|length }} gold cases</p>
+    <ul class="version-list">
+      {% for case in pack.cases %}
+      <li>{{ case.title }} · expects {{ case.expect_min_children }} child run(s)</li>
+      {% endfor %}
+    </ul>
+    <pre>{{ pack.output_schema | pretty }}</pre>
+  </article>
+  {% endfor %}
+</section>
+{% endblock %}

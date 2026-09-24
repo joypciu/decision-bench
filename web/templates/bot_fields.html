@@ -1,0 +1,77 @@
+<label>
+  <span>Name</span>
+  <input name="name" required maxlength="80" value="{{ prefill.name }}">
+</label>
+<label>
+  <span>Summary</span>
+  <input name="summary" maxlength="160" value="{{ prefill.summary }}">
+</label>
+<label class="wide">
+  <span>Instructions</span>
+  <textarea name="instructions" rows="6" required>{{ prefill.instructions }}</textarea>
+</label>
+<div class="split">
+  <label>
+    <span>Provider</span>
+    <select name="provider">
+      {% for provider in provider_rows %}
+      <option value="{{ provider.name }}" {% if prefill.provider == provider.name %}selected{% endif %}>
+        {{ provider.name }}{% if not provider.configured %} — key required{% endif %}
+      </option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>
+    <span>Model</span>
+    <input name="model" value="{{ prefill.model }}" placeholder="blank uses the provider default">
+  </label>
+</div>
+<label>
+  <span>Task pack</span>
+  <select name="pack_id" id="pack-select">
+    <option value="">None</option>
+    {% for pack in pack_list %}
+    <option value="{{ pack.id }}" {% if prefill.pack_id == pack.id %}selected{% endif %}>{{ pack.name }}</option>
+    {% endfor %}
+  </select>
+</label>
+<label class="wide">
+  <span>Output schema</span>
+  <textarea name="output_schema" id="schema" rows="12" required>{{ prefill.output_schema | pretty }}</textarea>
+</label>
+<fieldset>
+  <legend>Tools</legend>
+  {% for tool in ["read_case", "delegate", "finish"] %}
+  <label class="check">
+    <input type="checkbox" name="allowed_tools" value="{{ tool }}" {% if tool in prefill.allowed_tools %}checked{% endif %}>
+    <span>{{ tool }}</span>
+  </label>
+  {% endfor %}
+</fieldset>
+<fieldset>
+  <legend>Bots this bot may spawn</legend>
+  {% for bot in all_bots %}
+  <label class="check">
+    <input type="checkbox" name="allowed_bot_ids" value="{{ bot.id }}" {% if bot.id in prefill.allowed_bot_ids %}checked{% endif %}>
+    <span>{{ bot.name }}</span>
+  </label>
+  {% endfor %}
+</fieldset>
+<div class="split three">
+  <label>
+    <span>Max steps</span>
+    <input name="max_steps" type="number" min="1" max="12" value="{{ prefill.max_steps }}">
+  </label>
+  <label>
+    <span>Max child depth</span>
+    <input name="max_child_depth" type="number" min="0" max="3" value="{{ prefill.max_child_depth }}">
+  </label>
+  <label>
+    <span>Max tokens</span>
+    <input name="max_tokens" type="number" min="100" max="20000" value="{{ prefill.max_tokens }}">
+  </label>
+</div>
+<label class="check">
+  <input type="checkbox" name="require_delegation" {% if prefill.require_delegation %}checked{% endif %}>
+  <span>Require a sub-agent before finish</span>
+</label>

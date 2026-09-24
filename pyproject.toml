@@ -1,0 +1,34 @@
+[project]
+name = "decision-bench"
+version = "0.1.0"
+description = "Local workbench for structured decisions, bounded sub-agents, and provider evals."
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "joypciu" }]
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn>=0.32",
+    "jinja2>=3.1",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "httpx>=0.27",
+    "pyyaml>=6.0",
+    "jsonschema>=4.23",
+    "python-multipart>=0.0.12",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.3"]
+
+[project.scripts]
+decision-bench = "decision_bench.main:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
