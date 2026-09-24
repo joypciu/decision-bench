@@ -144,3 +144,22 @@ def test_pdf_crop_drops_text_outside_the_box(app):
     )
     assert dropped.status_code == 400
     assert "Hello PDF" not in dropped.text
+
+
+def test_spreadsheet_extracts_cell_text(app):
+    import io
+
+    from openpyxl import Workbook
+
+    book = Workbook()
+    sheet = book.active
+    sheet["A1"] = "Invoice total"
+    buffer = io.BytesIO()
+    book.save(buffer)
+    client = TestClient(app)
+    response = client.post(
+        "/documents",
+        files={"file": ("book.xlsx", buffer.getvalue(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+    )
+    assert response.status_code == 200
+    assert "Invoice total" in response.text

@@ -9,7 +9,8 @@ MAX_BYTES = 8_000_000
 TEXT_SUFFIXES = {".md", ".txt", ".html", ".htm", ".csv", ".json", ".xml"}
 PDF_SUFFIXES = {".pdf"}
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff"}
-SUPPORTED = TEXT_SUFFIXES | PDF_SUFFIXES | IMAGE_SUFFIXES
+OFFICE_SUFFIXES = {".docx", ".pptx", ".xlsx", ".xls"}
+SUPPORTED = TEXT_SUFFIXES | PDF_SUFFIXES | IMAGE_SUFFIXES | OFFICE_SUFFIXES
 
 
 @dataclass
@@ -26,7 +27,7 @@ def extract_document(data: bytes, filename: str, crop: tuple[int, int, int, int]
         raise ValueError("Files are limited to 8 MB.")
     suffix = Path(filename or "upload.txt").suffix.lower()
     if suffix not in SUPPORTED:
-        raise ValueError("Supported files: md, txt, html, csv, json, xml, pdf, png, jpg, webp, gif, bmp, tiff.")
+        raise ValueError("Supported files: md, txt, html, csv, json, xml, pdf, images, docx, pptx, xlsx.")
     if suffix in {".md", ".txt"}:
         text = data.decode("utf-8", errors="replace").strip()
     elif suffix in IMAGE_SUFFIXES:

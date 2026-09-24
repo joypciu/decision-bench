@@ -16,7 +16,7 @@ copy .env.example .env
 py -m decision_bench
 ```
 
-Open [http://127.0.0.1:8000](http://127.0.0.1:8000).
+Open [http://127.0.0.1:8000](http://127.0.0.1:8000). Documents accepts markdown, text, HTML, CSV, JSON, XML, PDF, images, Word, PowerPoint, and Excel. PDF and image crops limit extraction to one region. Image and cropped PDF text uses Windows OCR when `winocr` is installed, or Tesseract when it is on the path. Conversion of the other formats uses [MarkItDown](https://github.com/microsoft/markitdown).
 
 ```bash
 pytest

@@ -135,7 +135,7 @@ def test_parallel_delegates_overlap_and_a_failure_does_not_cancel_the_sibling(ap
 
         def complete(self, *, model, messages, tools, schema):
             del model, messages, tools, schema
-            time.sleep(0.35)
+            time.sleep(0.5)
             return finish({"answer": "ok"})
 
     state.providers["slow"] = SlowProvider()
@@ -207,7 +207,7 @@ def test_parallel_delegates_overlap_and_a_failure_does_not_cancel_the_sibling(ap
     assert run.output == {"answer": "done"}
     assert {child.bot_id for child in children} == {left.id, right.id}
     assert all(child.status == "succeeded" and child.provider == "slow" for child in children)
-    assert elapsed < 0.7
+    assert elapsed < 0.85
 
 
 def test_search_and_delegate_run_in_one_turn(app, monkeypatch):
