@@ -5,7 +5,7 @@ from dataclasses import asdict
 
 from urllib.parse import quote
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.responses import RedirectResponse
 
 from decision_bench.domain import BotVersion
@@ -14,7 +14,9 @@ from decision_bench.provider_admin import public_provider, remove_provider, save
 from decision_bench.services import (
     AppState,
     create_bot,
+    open_run,
     parse_schema,
+    perform_run,
     run_eval,
     run_tree,
     save_version,
@@ -172,11 +174,11 @@ def register_routes(app: FastAPI) -> None:
         return render(request, "packs.html", active="packs", pack_list=list(state.packs.values()))
 
     @app.post("/runs")
-    async def create_run_page(request: Request):
+    async def create_run_page(request: Request, background: BackgroundTasks):
         state = work(request.app)
         form = await request.form()
         try:
-            run = start_run(
+            run = open_run(
                 state,
                 bot_id=str(form.get("bot_id") or ""),
                 text=str(form.get("input") or ""),
@@ -185,6 +187,7 @@ def register_routes(app: FastAPI) -> None:
             )
         except ValueError as exc:
             return RedirectResponse(f"/bots/{form.get('bot_id')}?error={quote(str(exc))}", status_code=303)
+        background.add_task(perform_run, state, run.id)
         return RedirectResponse(f"/runs/{run.id}", status_code=303)
 
     @app.get("/runs/{run_id}")
@@ -466,6 +469,7 @@ def render(request: Request, name: str, status_code: int = 200, **extra):
         "active": "",
         "provider_rows": rows,
         "bots": ordered_bots(state),
+        "bot_names": bot_name_map(state),
         "packs": state.packs,
         "chat_provider_rows": [
             row for row in rows if row.get("kind") in {"demo", "gemini", "openai", "custom"}

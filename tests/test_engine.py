@@ -295,6 +295,19 @@ def test_delegate_can_choose_a_provider_for_one_child(app):
     )
 
 
+def test_open_run_shows_progress_before_it_finishes(app):
+    from decision_bench.services import open_run, perform_run
+
+    state = app.state.work
+    run = open_run(state, bot_id="change-lead", text="diff --git a/README.md b/README.md\n+Hello there\n", provider="demo")
+    assert run.status == "running"
+    assert state.repo.list_children(run.id) == []
+    perform_run(state, run.id)
+    finished = state.repo.get_run(run.id)
+    assert finished.status == "succeeded"
+    assert len(state.repo.list_children(run.id)) >= 2
+
+
 def test_token_budget_stops_the_run(app):
     state = app.state.work
     state.providers["script"] = ScriptProvider(

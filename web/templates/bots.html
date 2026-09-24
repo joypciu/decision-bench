@@ -10,17 +10,43 @@
 </header>
 <section class="stack">
   {% for row in rows %}
-  <article class="panel bot-row">
-    <div>
-      <h2><a href="/bots/{{ row.bot.id }}">{{ row.bot.name }}</a></h2>
-      <p>{{ row.bot.summary }}</p>
+  <article class="panel bot-card">
+    <div class="bot-card-head">
+      <div>
+        <h2><a href="/bots/{{ row.bot.id }}">{{ row.bot.name }}</a></h2>
+        <p class="lede">{{ row.bot.summary or "No summary" }}</p>
+      </div>
+      <a class="button ghost" href="/bots/{{ row.bot.id }}">Open</a>
     </div>
     {% if row.version %}
-    <dl class="meta">
-      <div><dt>Version</dt><dd>{{ row.version.version }}</dd></div>
-      <div><dt>Provider</dt><dd>{{ row.version.provider }}</dd></div>
-      <div><dt>Spawns</dt><dd>{{ row.version.allowed_bot_ids|join(", ") or "—" }}</dd></div>
-    </dl>
+    <div class="fact-grid">
+      <div>
+        <p class="label">Version</p>
+        <strong>v{{ row.version.version }}</strong>
+      </div>
+      <div>
+        <p class="label">Provider</p>
+        <strong>{{ row.version.provider }}</strong>
+        <p class="muted-line">{{ row.version.model }}</p>
+      </div>
+      <div>
+        <p class="label">Budget</p>
+        <strong>{{ row.version.max_steps }} steps</strong>
+        <p class="muted-line">depth {{ row.version.max_child_depth }}</p>
+      </div>
+    </div>
+    <div>
+      <p class="label">Spawns</p>
+      {% if row.version.allowed_bot_ids %}
+      <div class="spawn-row">
+        {% for child_id in row.version.allowed_bot_ids %}
+        <a class="chip" href="/bots/{{ child_id }}">{{ bot_names.get(child_id, child_id) }}</a>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="empty">Does not spawn other bots.</p>
+      {% endif %}
+    </div>
     {% endif %}
   </article>
   {% endfor %}

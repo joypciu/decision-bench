@@ -13,19 +13,13 @@
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@500;600;700&family=Fraunces:opsz,wght@9..144,560;9..144,640&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
   <div class="shell">
-    <aside class="rail">
-      <div class="rail-top">
-        <a class="mark" href="/">Decision Bench</a>
-      </div>
-      <div class="theme-switch" role="group" aria-label="Color theme">
-        <button type="button" data-theme-value="light" aria-pressed="false">Light</button>
-        <button type="button" data-theme-value="dark" aria-pressed="false">Dark</button>
-      </div>
+    <header class="topbar">
+      <a class="mark" href="/"><span class="mark-badge">DB</span> Decision Bench</a>
       <nav>
         <a class="{% if active == 'home' %}active{% endif %}" href="/">Runs</a>
         <a class="{% if active == 'bots' %}active{% endif %}" href="/bots">Bots</a>
@@ -33,15 +27,17 @@
         <a class="{% if active == 'evals' %}active{% endif %}" href="/evals">Evals</a>
         <a class="{% if active == 'settings' %}active{% endif %}" href="/settings">Settings</a>
       </nav>
-      <ul class="providers">
-        {% for provider in provider_rows if provider.configured %}
-        <li>
-          <span class="dot on"></span>
-          <span>{{ provider.name }}</span>
-        </li>
-        {% endfor %}
-      </ul>
-    </aside>
+      <div class="theme-switch" role="group" aria-label="Color theme">
+        <button type="button" data-theme-value="light" aria-pressed="false">Light</button>
+        <button type="button" data-theme-value="dark" aria-pressed="false">Dark</button>
+      </div>
+    </header>
+    <div class="readybar">
+      <span class="label">Ready</span>
+      {% for provider in provider_rows if provider.configured %}
+      <span class="chip">{{ provider.name }}</span>
+      {% endfor %}
+    </div>
     <main>
       {% block content %}{% endblock %}
     </main>

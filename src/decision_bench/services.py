@@ -148,7 +148,7 @@ def save_version(state: AppState, bot_id: str, **kwargs) -> BotVersion:
     )
 
 
-def start_run(
+def open_run(
     state: AppState,
     *,
     bot_id: str,
@@ -181,7 +181,50 @@ def start_run(
         root_run_id=None,
         depth=0,
     )
+    return run
+
+
+def start_run(
+    state: AppState,
+    *,
+    bot_id: str,
+    text: str,
+    provider: str | None = None,
+    model: str | None = None,
+    case_id: str | None = None,
+    pack_id: str | None = None,
+) -> Run:
+    run = open_run(
+        state,
+        bot_id=bot_id,
+        text=text,
+        provider=provider,
+        model=model,
+        case_id=case_id,
+        pack_id=pack_id,
+    )
     return execute_run(state.repo, state.providers, state.packs, run.id)
+
+
+def perform_run(state: AppState, run_id: str) -> None:
+    try:
+        execute_run(state.repo, state.providers, state.packs, run_id)
+    except Exception as exc:
+        current = state.repo.get_run(run_id)
+        if current is not None and current.status == "running":
+            state.repo.finish_run(
+                run_id,
+                status="failed",
+                error=str(exc),
+                output=current.output,
+                schema_ok=False,
+                passed=False,
+                score=0,
+                checks=current.checks,
+                latency_ms=current.latency_ms,
+                prompt_tokens=current.prompt_tokens,
+                completion_tokens=current.completion_tokens,
+            )
 
 
 def new_run(

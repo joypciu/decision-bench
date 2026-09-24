@@ -40,7 +40,15 @@
       <div><dt>Provider</dt><dd>{{ latest.provider }} / {{ latest.model }}</dd></div>
       <div><dt>Pack</dt><dd>{{ latest.pack_id or "—" }}</dd></div>
       <div><dt>Tools</dt><dd>{{ latest.allowed_tools|join(", ") }}</dd></div>
-      <div><dt>May spawn</dt><dd>{{ latest.allowed_bot_ids|join(", ") or "—" }}</dd></div>
+      <div><dt>May spawn</dt><dd>
+        {% if latest.allowed_bot_ids %}
+        <div class="spawn-row">
+          {% for child_id in latest.allowed_bot_ids %}
+          <a class="chip" href="/bots/{{ child_id }}">{{ bot_names.get(child_id, child_id) }}</a>
+          {% endfor %}
+        </div>
+        {% else %}—{% endif %}
+      </dd></div>
       <div><dt>Budget</dt><dd>{{ latest.max_steps }} steps · depth {{ latest.max_child_depth }} · {{ latest.max_tokens }} tokens</dd></div>
     </dl>
     <pre>{{ latest.output_schema | pretty }}</pre>

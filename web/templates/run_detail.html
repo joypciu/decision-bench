@@ -1,7 +1,17 @@
 {% extends "base.html" %}
 {% block title %}Run · Decision Bench{% endblock %}
 {% block content %}
-<header class="page-head">
+<div id="live-run" data-run-id="{{ node.run.id }}" data-status="{{ node.run.status }}" hidden></div>
+{% if node.run.status == 'running' %}
+<section class="panel live-stage" id="live-panel">
+  <div class="panel-head">
+    <h2><span class="pulse"></span> Working</h2>
+    <span class="pill" id="live-status">running</span>
+  </div>
+  <p class="lede" id="live-note">The bot is running. Sub-bots show up here as they start.</p>
+  <ul class="live-log" id="live-log"></ul>
+</section>
+{% endif %}
   <div>
     <p class="eyebrow">{{ node.bot_name }} · {{ node.run.provider }}</p>
     <h1 class="decision">{{ node.run.output | decision or node.run.status }}</h1>
