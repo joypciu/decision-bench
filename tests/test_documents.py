@@ -125,3 +125,22 @@ def test_image_crop_keeps_only_the_selected_text(app):
     assert response.status_code == 200
     assert "KEEP" in response.text
     assert "DROP" not in response.text
+
+
+def test_pdf_crop_drops_text_outside_the_box(app):
+    client = TestClient(app)
+    payload = _pdf_with_text("Hello PDF")
+    kept = client.post(
+        "/documents",
+        data={"page": "1", "crop_left": "0", "crop_top": "80", "crop_right": "300", "crop_bottom": "200"},
+        files={"file": ("note.pdf", payload, "application/pdf")},
+    )
+    assert kept.status_code == 200
+    assert "Hello PDF" in kept.text
+    dropped = client.post(
+        "/documents",
+        data={"page": "1", "crop_left": "0", "crop_top": "0", "crop_right": "300", "crop_bottom": "40"},
+        files={"file": ("note.pdf", payload, "application/pdf")},
+    )
+    assert dropped.status_code == 400
+    assert "Hello PDF" not in dropped.text

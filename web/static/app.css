@@ -257,6 +257,7 @@ pre {
 }
 .split { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
 .split.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.split.five { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .split.three { grid-template-columns: repeat(3, 1fr); }
 fieldset { border: 1px solid var(--line); border-radius: 12px; display: flex; flex-wrap: wrap; gap: 0.55rem 1rem; }
 .check { display: flex; align-items: center; gap: 0.4rem; font-weight: 550; }

@@ -33,11 +33,32 @@ def extract_document(data: bytes, filename: str, crop: tuple[int, int, int, int]
         if crop is not None:
             data = crop_image(data, crop)
         text = ocr_image(data)
+    elif suffix in PDF_SUFFIXES and crop is not None:
+        text = ocr_image(crop_pdf(data, page=page, box=crop))
+    elif suffix in PDF_SUFFIXES:
+        text = _markitdown(data, suffix)
     else:
         text = _markitdown(data, suffix)
     if not text:
         raise ValueError("No text could be read from that file.")
     return DocumentResult(filename=Path(filename).name, kind=suffix.lstrip("."), markdown=text[:50_000])
+
+
+def crop_pdf(data: bytes, page: int, box: tuple[int, int, int, int]) -> bytes:
+    import pypdfium2 as pdfium
+
+    document = pdfium.PdfDocument(data)
+    if page < 1 or page > len(document):
+        raise ValueError("That PDF page does not exist.")
+    scale = 2
+    rendered = document[page - 1].render(scale=scale).to_pil()
+    left, top, right, bottom = (int(value * scale) for value in box)
+    if left < 0 or top < 0 or right > rendered.width or bottom > rendered.height or left >= right or top >= bottom:
+        raise ValueError("Crop box is outside the PDF page.")
+    cropped = rendered.crop((left, top, right, bottom))
+    buffer = io.BytesIO()
+    cropped.save(buffer, format="PNG")
+    return buffer.getvalue()
 
 
 def crop_image(data: bytes, box: tuple[int, int, int, int]) -> bytes:
