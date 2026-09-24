@@ -9,6 +9,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import RedirectResponse
 
 from decision_bench.domain import BotVersion
+from decision_bench.present import decision_of, summary_of
 from decision_bench.services import (
     AppState,
     create_bot,
@@ -374,7 +375,7 @@ def render(request: Request, name: str, status_code: int = 200, **extra):
     context = {
         "active": "",
         "provider_rows": provider_rows(state),
-        "bots": state.repo.list_bots(),
+        "bots": ordered_bots(state),
         "packs": state.packs,
         **extra,
     }
@@ -386,11 +387,23 @@ def render(request: Request, name: str, status_code: int = 200, **extra):
     )
 
 
+def ordered_bots(state: AppState):
+    ranked = []
+    for bot in state.repo.list_bots():
+        version = state.repo.latest_version(bot.id)
+        lead = bool(version and (version.require_delegation or version.pack_id))
+        ranked.append((0 if lead else 1, bot.name.lower(), bot))
+    ranked.sort(key=lambda item: (item[0], item[1]))
+    return [item[2] for item in ranked]
+
+
 def tree_dict(node) -> dict | None:
     if node is None:
         return None
     return {
         "run": asdict(node.run),
+        "decision": decision_of(node.run.output),
+        "summary": summary_of(node.run.output),
         "bot_name": node.bot_name,
         "steps": [asdict(step) for step in node.steps],
         "children": [tree_dict(child) for child in node.children],

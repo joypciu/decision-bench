@@ -14,7 +14,7 @@
       <span>Bot</span>
       <select name="bot_id">
         {% for bot in bots %}
-        <option value="{{ bot.id }}">{{ bot.name }}</option>
+        <option value="{{ bot.id }}" {% if bot.id == 'change-lead' %}selected{% endif %}>{{ bot.name }}</option>
         {% endfor %}
       </select>
     </label>
@@ -30,7 +30,7 @@
       <span>Provider</span>
       <select name="provider">
         {% for provider in provider_rows %}
-        <option value="{{ provider.name }}">{{ provider.name }}</option>
+        <option value="{{ provider.name }}">{{ provider.name }}{% if not provider.configured %} — key required{% endif %}</option>
         {% endfor %}
       </select>
     </label>

@@ -4,12 +4,21 @@
 <header class="page-head">
   <div>
     <p class="eyebrow">{{ node.bot_name }} · {{ node.run.provider }}</p>
-    <h1>{{ node.run.status }} · score {{ node.run.score }}</h1>
-    <p class="lede">{{ node.run.latency_ms }} ms · {{ node.run.prompt_tokens + node.run.completion_tokens }} tokens</p>
+    <h1 class="decision">{{ node.run.output | decision or node.run.status }}</h1>
+    <p class="lede">{{ node.run.latency_ms }} ms · {{ node.run.prompt_tokens + node.run.completion_tokens }} tokens · score {{ node.run.score }}</p>
   </div>
-  <span class="pill {{ 'pass' if node.run.passed else 'fail' }}">{% if node.run.passed %}passed{% else %}not passed{% endif %}</span>
+  <span class="pill {{ node.run.status }}">{{ node.run.status }}</span>
 </header>
+{% if node.run.output | summary %}<p class="summary">{{ node.run.output | summary }}</p>{% endif %}
 {% if node.run.error %}<p class="banner">{{ node.run.error }}</p>{% endif %}
+{% if node.run.error | provider_hint %}<p class="hint">{{ node.run.error | provider_hint }}</p>{% endif %}
+{% if node.children %}
+<ul class="child-row">
+  {% for child in node.children %}
+  <li><span class="pill {{ child.run.status }}">{{ child.bot_name }}</span> {{ child.run.output | decision or child.run.status }}</li>
+  {% endfor %}
+</ul>
+{% endif %}
 <section class="grid two">
   <article class="panel">
     <h2>Trace</h2>

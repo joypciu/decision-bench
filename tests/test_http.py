@@ -36,6 +36,7 @@ def test_dashboard_and_eval_flow(app):
     body = run.json()
     assert body["run"]["status"] == "succeeded"
     assert body["run"]["output"]["answer"] == "demo"
+    assert body["tree"]["decision"] == "demo"
 
     page = client.post(
         "/evals",
@@ -44,6 +45,32 @@ def test_dashboard_and_eval_flow(app):
     )
     assert page.status_code == 200
     assert "2/2 passed" in page.text
+
+    lead = client.post(
+        "/api/runs",
+        json={
+            "bot_id": "change-lead",
+            "provider": "demo",
+            "input": (
+                "diff --git a/auth.py b/auth.py\n"
+                "--- a/auth.py\n"
+                "+++ b/auth.py\n"
+                "-    if user.is_authenticated:\n"
+                "+    if True:  # bypass auth\n"
+            ),
+        },
+    )
+    assert lead.status_code == 200
+    lead_body = lead.json()
+    assert lead_body["tree"]["decision"] == "block"
+    assert {child["decision"] for child in lead_body["tree"]["children"]} == {"high", "none"}
+    home_after = client.get("/")
+    assert "block" in home_after.text
+    detail = client.get(f"/runs/{lead_body['run']['id']}")
+    assert "Security checker" in detail.text
+    assert "Migration checker" in detail.text
+    evals = client.get("/evals")
+    assert 'value="change-lead" selected' in evals.text
 
     health = client.get("/api/health")
     assert health.status_code == 200

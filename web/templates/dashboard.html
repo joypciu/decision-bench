@@ -32,16 +32,16 @@
   {% if runs %}
   <table>
     <thead>
-      <tr><th>Bot</th><th>Provider</th><th>Status</th><th>Score</th><th>Latency</th></tr>
+      <tr><th>Bot</th><th>Decision</th><th>Provider</th><th>Status</th><th>Score</th></tr>
     </thead>
     <tbody>
       {% for run in runs %}
       <tr>
         <td><a href="/runs/{{ run.id }}">{{ bot_names.get(run.bot_id, run.bot_id) }}</a></td>
+        <td>{{ run.output | decision or "—" }}</td>
         <td>{{ run.provider }}</td>
         <td><span class="pill {{ run.status }}">{{ run.status }}</span></td>
         <td>{{ run.score }}</td>
-        <td>{{ run.latency_ms }} ms</td>
       </tr>
       {% endfor %}
     </tbody>

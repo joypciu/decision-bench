@@ -9,6 +9,7 @@ from fastapi.templating import Jinja2Templates
 
 from decision_bench.config import Settings
 from decision_bench.packs import load_packs
+from decision_bench.present import decision_of, provider_hint, summary_of
 from decision_bench.providers.registry import build_providers
 from decision_bench.seed import seed_templates
 from decision_bench.services import AppState
@@ -38,6 +39,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.work = state
     templates = Jinja2Templates(directory=str(settings.root / "web" / "templates"))
     templates.env.filters["pretty"] = lambda value: json.dumps(value, indent=2, sort_keys=True)
+    templates.env.filters["decision"] = decision_of
+    templates.env.filters["summary"] = summary_of
+    templates.env.filters["provider_hint"] = provider_hint
     app.state.templates = templates
     static_dir = settings.root / "web" / "static"
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")

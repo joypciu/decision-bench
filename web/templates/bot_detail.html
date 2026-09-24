@@ -23,7 +23,7 @@
         <span>Provider</span>
         <select name="provider">
           {% for provider in provider_rows %}
-          <option value="{{ provider.name }}" {% if latest.provider == provider.name %}selected{% endif %}>{{ provider.name }}</option>
+          <option value="{{ provider.name }}" {% if latest.provider == provider.name %}selected{% endif %}>{{ provider.name }}{% if not provider.configured %} — key required{% endif %}</option>
           {% endfor %}
         </select>
       </label>

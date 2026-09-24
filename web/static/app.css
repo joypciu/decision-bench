@@ -34,6 +34,7 @@ h1, h2, .mark {
 }
 
 h1 { font-size: 2.4rem; line-height: 1.05; margin: 0; }
+h1.decision { font-size: 3rem; text-transform: lowercase; }
 h2 { font-size: 1.25rem; margin: 0 0 0.6rem; }
 a { color: inherit; }
 
@@ -162,6 +163,10 @@ fieldset { border: 1px solid var(--line); border-radius: 12px; display: flex; fl
 .meta dd { margin: 0; }
 .meta.stacked { display: grid; gap: 0.55rem; }
 .banner { background: #f8e6de; border-radius: 12px; padding: 0.7rem 0.9rem; }
+.hint, .summary { max-width: 68ch; }
+.summary { font-size: 1.05rem; }
+.child-row { display: flex; flex-wrap: wrap; gap: 0.55rem 0.8rem; list-style: none; padding: 0; margin: 0 0 1rem; }
+.child-row li { display: flex; gap: 0.4rem; align-items: center; }
 .empty { color: var(--muted); }
 .version-list, .checks, .steps { margin: 0; padding-left: 1.1rem; }
 .checks { list-style: none; padding: 0; display: grid; gap: 0.55rem; }
