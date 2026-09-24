@@ -4,7 +4,7 @@
 <header class="page-head">
   <div>
     <p class="eyebrow">Evals</p>
-    <h1>Same cases. Different providers.</h1>
+    <h1>Evals</h1>
   </div>
 </header>
 {% if error %}<p class="banner">{{ error }}</p>{% endif %}
@@ -29,7 +29,7 @@
     <label>
       <span>Provider</span>
       <select name="provider">
-        {% for provider in provider_rows %}
+        {% for provider in chat_provider_rows %}
         <option value="{{ provider.name }}">{{ provider.name }}{% if not provider.configured %} — key required{% endif %}</option>
         {% endfor %}
       </select>

@@ -10,7 +10,7 @@ from fastapi.templating import Jinja2Templates
 from decision_bench.config import Settings
 from decision_bench.packs import load_packs
 from decision_bench.present import decision_of, provider_hint, summary_of
-from decision_bench.providers.registry import build_providers
+from decision_bench.provider_admin import reload_providers, seed_provider_configs
 from decision_bench.seed import seed_templates
 from decision_bench.services import AppState
 from decision_bench.storage.sqlite import SqliteRunStore
@@ -25,12 +25,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     repo.migrate()
     packs = load_packs(settings.root / "packs")
     seed_templates(repo, packs)
+    seed_provider_configs(repo, settings)
     state = AppState(
         settings=settings,
         repo=repo,
         packs=packs,
-        providers=build_providers(settings),
+        providers={},
     )
+    reload_providers(state)
     app = FastAPI(
         title="Decision Bench",
         version="0.1.0",

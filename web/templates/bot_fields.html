@@ -14,7 +14,7 @@
   <label>
     <span>Provider</span>
     <select name="provider">
-      {% for provider in provider_rows %}
+      {% for provider in chat_provider_rows %}
       <option value="{{ provider.name }}" {% if prefill.provider == provider.name %}selected{% endif %}>
         {{ provider.name }}{% if not provider.configured %} — key required{% endif %}
       </option>

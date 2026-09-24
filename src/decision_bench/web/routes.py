@@ -10,6 +10,7 @@ from fastapi.responses import RedirectResponse
 
 from decision_bench.domain import BotVersion
 from decision_bench.present import decision_of, summary_of
+from decision_bench.provider_admin import public_provider, remove_provider, save_provider
 from decision_bench.services import (
     AppState,
     create_bot,
@@ -227,16 +228,82 @@ def register_routes(app: FastAPI) -> None:
             return RedirectResponse(f"/evals?error={quote(str(exc))}", status_code=303)
         return RedirectResponse(f"/evals?id={result.id}", status_code=303)
 
+    @app.get("/settings")
+    def settings_page(request: Request):
+        return render(request, "settings.html", active="settings", error=request.query_params.get("error"), notice=request.query_params.get("notice"))
+
+    @app.get("/api/providers")
+    def api_providers() -> list[dict]:
+        state = work(app)
+        return [public_provider(state, config) for config in state.repo.list_provider_configs()]
+
+    @app.post("/api/providers")
+    def api_save_provider(body: dict) -> dict:
+        state = work(app)
+        try:
+            config = save_provider(state, **provider_kwargs(body))
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return public_provider(state, config)
+
+    @app.post("/settings/providers")
+    async def save_provider_page(request: Request):
+        state = work(request.app)
+        form = await request.form()
+        try:
+            save_provider(state, **provider_kwargs(form_provider_body(form)))
+        except ValueError as exc:
+            return RedirectResponse(f"/settings?error={quote(str(exc))}", status_code=303)
+        return RedirectResponse("/settings?notice=Provider+saved.", status_code=303)
+
+    @app.post("/settings/providers/{name}/delete")
+    def delete_provider_page(name: str, request: Request):
+        try:
+            remove_provider(work(request.app), name)
+        except ValueError as exc:
+            return RedirectResponse(f"/settings?error={quote(str(exc))}", status_code=303)
+        return RedirectResponse("/settings?notice=Provider+removed.", status_code=303)
+
 
 def work(app: FastAPI) -> AppState:
     return app.state.work
 
 
 def provider_rows(state: AppState) -> list[dict]:
-    return [
-        {"name": provider.name, "configured": provider.configured, "detail": provider.detail}
-        for provider in state.providers.values()
+    rows = [
+        {
+            "name": "demo",
+            "configured": True,
+            "detail": "Deterministic stand-in. Runs without an API key.",
+            "kind": "demo",
+            "builtin": True,
+            "enabled": True,
+            "key_hint": "",
+            "base_url": "",
+            "default_model": "demo",
+        }
     ]
+    seen = {"demo"}
+    for config in state.repo.list_provider_configs():
+        seen.add(config.name)
+        rows.append(public_provider(state, config))
+    for name, provider in state.providers.items():
+        if name in seen:
+            continue
+        rows.append(
+            {
+                "name": name,
+                "configured": provider.configured,
+                "detail": provider.detail,
+                "kind": "custom",
+                "builtin": False,
+                "enabled": True,
+                "key_hint": "",
+                "base_url": "",
+                "default_model": getattr(provider, "default_model", "") or "",
+            }
+        )
+    return rows
 
 
 def bot_name_map(state: AppState) -> dict[str, str]:
@@ -363,6 +430,28 @@ def safe_prefill(form) -> dict:
     }
 
 
+def provider_kwargs(body: dict) -> dict:
+    return {
+        "name": str(body.get("name") or ""),
+        "kind": str(body.get("kind") or "openai"),
+        "base_url": str(body.get("base_url") or ""),
+        "api_key": str(body.get("api_key") or ""),
+        "default_model": str(body.get("default_model") or ""),
+        "enabled": bool(body.get("enabled")),
+    }
+
+
+def form_provider_body(form) -> dict:
+    return {
+        "name": str(form.get("name") or ""),
+        "kind": str(form.get("kind") or "openai"),
+        "base_url": str(form.get("base_url") or ""),
+        "api_key": str(form.get("api_key") or ""),
+        "default_model": str(form.get("default_model") or ""),
+        "enabled": form.get("enabled") == "on",
+    }
+
+
 def parse_int(value, label: str) -> int:
     try:
         return int(value)
@@ -372,11 +461,15 @@ def parse_int(value, label: str) -> int:
 
 def render(request: Request, name: str, status_code: int = 200, **extra):
     state = work(request.app)
+    rows = provider_rows(state)
     context = {
         "active": "",
-        "provider_rows": provider_rows(state),
+        "provider_rows": rows,
         "bots": ordered_bots(state),
         "packs": state.packs,
+        "chat_provider_rows": [
+            row for row in rows if row.get("kind") in {"demo", "gemini", "openai", "custom"}
+        ],
         **extra,
     }
     return request.app.state.templates.TemplateResponse(

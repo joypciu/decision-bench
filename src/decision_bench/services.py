@@ -22,10 +22,15 @@ class AppState:
     providers: dict[str, ModelProvider]
 
 
-def resolve_model(settings: Settings, provider: str, model: str | None) -> str:
+def resolve_model(settings: Settings, provider: str, model: str | None, providers: dict | None = None) -> str:
     cleaned = (model or "").strip()
     if cleaned:
         return cleaned
+    if providers is not None:
+        live = providers.get(provider)
+        default = getattr(live, "default_model", "") if live is not None else ""
+        if isinstance(default, str) and default.strip():
+            return default.strip()
     if provider == "gemini":
         return settings.gemini_model
     if provider == "openrouter":
@@ -75,7 +80,7 @@ def create_bot(
             version=0,
             instructions=instructions.strip(),
             provider=provider,
-            model=resolve_model(state.settings, provider, model),
+            model=resolve_model(state.settings, provider, model, state.providers),
             output_schema=output_schema,
             allowed_tools=tools,
             allowed_bot_ids=list(dict.fromkeys(allowed_bot_ids)),
@@ -129,7 +134,7 @@ def save_version(state: AppState, bot_id: str, **kwargs) -> BotVersion:
             version=0,
             instructions=str(payload["instructions"]).strip(),
             provider=payload["provider"],
-            model=resolve_model(state.settings, payload["provider"], payload["model"]),
+            model=resolve_model(state.settings, payload["provider"], payload["model"], state.providers),
             output_schema=payload["output_schema"],
             allowed_tools=tools,
             allowed_bot_ids=list(dict.fromkeys(payload["allowed_bot_ids"])),
@@ -169,7 +174,7 @@ def start_run(
         version=version,
         input_text=cleaned,
         provider=chosen,
-        model=resolve_model(state.settings, chosen, model or (version.model if provider is None else model)),
+        model=resolve_model(state.settings, chosen, model or (version.model if provider is None else model), state.providers),
         pack_id=pack_id if pack_id is not None else version.pack_id,
         case_id=case_id,
         parent_run_id=None,
@@ -237,7 +242,7 @@ def run_eval(
         raise ValueError("Pack not found.")
     if provider not in state.providers:
         raise ValueError(f"Unknown provider {provider}.")
-    chosen_model = resolve_model(state.settings, provider, model)
+    chosen_model = resolve_model(state.settings, provider, model, state.providers)
     results: list[dict[str, Any]] = []
     for case in pack.cases:
         run = start_run(
@@ -305,13 +310,15 @@ def validate_limits(max_steps: int, max_child_depth: int, max_tokens: int) -> No
 
 
 def normalize_tools(tools: list[str], children: list[str], require_delegation: bool) -> list[str]:
-    allowed = {"read_case", "delegate", "finish"}
+    allowed = {"read_case", "delegate", "delegate_parallel", "web_search", "fetch_url", "finish"}
     chosen = [tool for tool in tools if tool in allowed]
     if "finish" not in chosen:
         chosen.append("finish")
     if children or require_delegation:
         if "delegate" not in chosen:
             chosen.append("delegate")
+        if "delegate_parallel" not in chosen:
+            chosen.append("delegate_parallel")
     return list(dict.fromkeys(chosen))
 
 

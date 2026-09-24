@@ -1,29 +1,42 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Decision Bench{% endblock %}</title>
+  <script>
+    (function () {
+      var saved = localStorage.getItem("decision-bench-theme");
+      var theme = saved || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+      document.documentElement.setAttribute("data-theme", theme);
+    })();
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:opsz,wght@8..60,500;8..60,650&family=Source+Sans+3:wght@400;550;650&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
   <div class="shell">
     <aside class="rail">
-      <a class="mark" href="/">Decision Bench</a>
-      <p class="rail-note">Structured decisions, spawned sub-agents, scored runs.</p>
+      <div class="rail-top">
+        <a class="mark" href="/">Decision Bench</a>
+      </div>
+      <div class="theme-switch" role="group" aria-label="Color theme">
+        <button type="button" data-theme-value="light" aria-pressed="false">Light</button>
+        <button type="button" data-theme-value="dark" aria-pressed="false">Dark</button>
+      </div>
       <nav>
         <a class="{% if active == 'home' %}active{% endif %}" href="/">Runs</a>
         <a class="{% if active == 'bots' %}active{% endif %}" href="/bots">Bots</a>
         <a class="{% if active == 'packs' %}active{% endif %}" href="/packs">Packs</a>
         <a class="{% if active == 'evals' %}active{% endif %}" href="/evals">Evals</a>
+        <a class="{% if active == 'settings' %}active{% endif %}" href="/settings">Settings</a>
       </nav>
       <ul class="providers">
-        {% for provider in provider_rows %}
+        {% for provider in provider_rows if provider.configured %}
         <li>
-          <span class="dot {% if provider.configured %}on{% endif %}"></span>
+          <span class="dot on"></span>
           <span>{{ provider.name }}</span>
         </li>
         {% endfor %}
@@ -33,5 +46,6 @@
       {% block content %}{% endblock %}
     </main>
   </div>
+  <script src="/static/app.js"></script>
 </body>
 </html>

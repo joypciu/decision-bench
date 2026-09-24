@@ -10,6 +10,7 @@ class DemoProvider:
     name = "demo"
     configured = True
     detail = "Deterministic stand-in. Runs without an API key."
+    default_model = "demo"
 
     def complete(
         self,
@@ -55,6 +56,8 @@ def infer_output(schema: dict, messages: list[Message]) -> dict[str, Any]:
         return change_lead(case, payloads)
     if "gaps" in props and "severity" in props and "summary" in props:
         return incident_lead(case)
+    if "sources" in props and "summary" in props:
+        return {"summary": "No external lookup was required for this case.", "sources": []}
     if "findings" in props:
         return security_checker(case)
     if "notes" in props and "risk_level" in props:

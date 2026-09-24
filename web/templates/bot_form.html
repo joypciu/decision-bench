@@ -3,8 +3,7 @@
 {% block content %}
 <header class="page-head">
   <div>
-    <p class="eyebrow">New bot</p>
-    <h1>Define the worker.</h1>
+    <h1>New bot</h1>
   </div>
 </header>
 {% if error %}<p class="banner">{{ error }}</p>{% endif %}
@@ -13,5 +12,4 @@
   <button class="button" type="submit">Save bot</button>
 </form>
 <script id="pack-data" type="application/json">{{ pack_options | tojson }}</script>
-<script src="/static/app.js"></script>
 {% endblock %}

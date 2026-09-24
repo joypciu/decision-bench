@@ -38,6 +38,18 @@ class Completion:
 
 
 @dataclass
+class ProviderConfig:
+    name: str
+    kind: str
+    base_url: str
+    api_key: str
+    default_model: str
+    enabled: bool
+    builtin: bool
+    created_at: str
+
+
+@dataclass
 class Bot:
     id: str
     name: str

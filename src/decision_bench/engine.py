@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import json
 import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from decision_bench.domain import BotVersion, Check, Message, Run, ToolSpec
 from decision_bench.packs import find_case
 from decision_bench.ports import ModelProvider, ProviderError, RunStore
 from decision_bench.scoring import schema_check, score_output, summarize
+from decision_bench.websearch import fetch_url, web_search
 
 
 ABSOLUTE_DEPTH_CEILING = 8
@@ -97,14 +99,33 @@ def execute_run(
                 messages.append(
                     Message(role="assistant", content=completion.text or "", tool_calls=completion.tool_calls)
                 )
-                for call in completion.tool_calls:
+                ordered = order_tool_calls(completion.tool_calls)
+                delegate_calls = [call for call in ordered if call.name == "delegate"]
+                parallel_calls = [call for call in ordered if call.name == "delegate_parallel"]
+                io_calls = [call for call in ordered if call.name in {"web_search", "fetch_url"}]
+                if delegate_calls or parallel_calls or io_calls:
+                    batch_results = run_parallel_tools(
+                        repo, providers, packs, run, version, delegate_calls, parallel_calls, io_calls
+                    )
+                    delegated = delegated or any(
+                        isinstance(payload, dict) and (payload.get("status") or payload.get("results"))
+                        for _call, payload in batch_results
+                    )
+                    for call, payload in batch_results:
+                        repo.add_step(run.id, "tool_result", call.name, payload)
+                        messages.append(
+                            Message(
+                                role="tool",
+                                content=json.dumps(payload),
+                                tool_call_id=call.id,
+                                name=call.name,
+                            )
+                        )
+                for call in ordered:
+                    if call.name in {"delegate", "delegate_parallel", "web_search", "fetch_url"}:
+                        continue
                     if call.name == "read_case":
                         payload = {"input": run.input_text}
-                    elif call.name == "delegate":
-                        payload, did_delegate = handle_delegate(
-                            repo, providers, packs, run, version, call.arguments
-                        )
-                        delegated = delegated or did_delegate
                     elif call.name == "finish":
                         output = call.arguments if isinstance(call.arguments, dict) else {}
                         check = schema_check(output, version.output_schema)
@@ -224,12 +245,15 @@ def handle_delegate(
         return {"error": "Bot not found.", "bot_id": bot_id}, False
     from decision_bench.services import new_run
 
+    override = run.provider != version.provider or run.model != version.model
+    child_provider = run.provider if override else child_version.provider
+    child_model = run.model if override else child_version.model
     child = new_run(
         repo,
         version=child_version,
         input_text=f"{task}\n\nCASE:\n{run.input_text}",
-        provider=run.provider,
-        model=run.model,
+        provider=child_provider,
+        model=child_model,
         pack_id=run.pack_id,
         case_id=None,
         parent_run_id=run.id,
@@ -244,6 +268,65 @@ def handle_delegate(
         "error": finished.error,
         "passed": finished.passed,
     }, True
+
+
+def order_tool_calls(calls: list) -> list:
+    delegates = [call for call in calls if call.name in {"delegate", "delegate_parallel"}]
+    rest = [call for call in calls if call.name not in {"delegate", "delegate_parallel", "finish"}]
+    finishes = [call for call in calls if call.name == "finish"]
+    return delegates + rest + finishes
+
+
+def run_parallel_tools(repo, providers, packs, run, version, delegate_calls, parallel_calls, io_calls):
+    def one(bot_id: str, task: str) -> dict:
+        payload, _ok = handle_delegate(repo, providers, packs, run, version, {"bot_id": bot_id, "task": task})
+        return payload
+
+    def io(call, arguments: dict) -> dict:
+        if call.name == "web_search":
+            return web_search(str(arguments.get("query") or ""), repo.list_provider_configs())
+        return fetch_url(str(arguments.get("url") or ""))
+
+    singles = []
+    for call in delegate_calls:
+        arguments = call.arguments if isinstance(call.arguments, dict) else {}
+        singles.append((call, str(arguments.get("bot_id") or ""), str(arguments.get("task") or "")))
+    ios = []
+    for call in io_calls:
+        arguments = call.arguments if isinstance(call.arguments, dict) else {}
+        ios.append((call, arguments))
+
+    results = []
+    batch = [("delegate", call, bot_id, task) for call, bot_id, task in singles]
+    batch += [("io", call, arguments, "") for call, arguments in ios]
+    if len(batch) == 1 and batch[0][0] == "delegate":
+        call, bot_id, task = singles[0]
+        results.append((call, one(bot_id, task)))
+    elif batch:
+        def run_item(item):
+            kind, call, first, second = item
+            if kind == "delegate":
+                return call, one(first, second)
+            return call, io(call, first)
+
+        with ThreadPoolExecutor(max_workers=min(4, len(batch))) as pool:
+            results.extend(pool.map(run_item, batch))
+
+    for call in parallel_calls:
+        arguments = call.arguments if isinstance(call.arguments, dict) else {}
+        tasks = arguments.get("tasks") if isinstance(arguments.get("tasks"), list) else []
+        pairs = [
+            (str(item.get("bot_id") or ""), str(item.get("task") or ""))
+            for item in tasks
+            if isinstance(item, dict)
+        ]
+        if not pairs:
+            results.append((call, {"error": "Each task needs bot_id and task."}))
+            continue
+        with ThreadPoolExecutor(max_workers=min(4, len(pairs))) as pool:
+            payloads = list(pool.map(lambda item: one(item[0], item[1]), pairs))
+        results.append((call, {"results": payloads}))
+    return results
 
 
 def tool_specs(version: BotVersion) -> list[ToolSpec]:
@@ -267,7 +350,7 @@ def tool_specs(version: BotVersion) -> list[ToolSpec]:
         specs.append(
             ToolSpec(
                 name="delegate",
-                description="Spawn one allowed bot and wait for its structured result.",
+                description="Spawn one allowed bot and wait for its structured result. Several delegate calls in one turn run at the same time.",
                 parameters={
                     "type": "object",
                     "additionalProperties": False,
@@ -276,6 +359,57 @@ def tool_specs(version: BotVersion) -> list[ToolSpec]:
                         "bot_id": {"type": "string", "enum": list(version.allowed_bot_ids)},
                         "task": {"type": "string"},
                     },
+                },
+            )
+        )
+        specs.append(
+            ToolSpec(
+                name="delegate_parallel",
+                description="Spawn several allowed bots at the same time and wait for all of them.",
+                parameters={
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": ["tasks"],
+                    "properties": {
+                        "tasks": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "additionalProperties": False,
+                                "required": ["bot_id", "task"],
+                                "properties": {
+                                    "bot_id": {"type": "string", "enum": list(version.allowed_bot_ids)},
+                                    "task": {"type": "string"},
+                                },
+                            },
+                        }
+                    },
+                },
+            )
+        )
+    if "web_search" in version.allowed_tools:
+        specs.append(
+            ToolSpec(
+                name="web_search",
+                description="Search public web sources and return titles, URLs, and short snippets.",
+                parameters={
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": ["query"],
+                    "properties": {"query": {"type": "string"}},
+                },
+            )
+        )
+    if "fetch_url" in version.allowed_tools:
+        specs.append(
+            ToolSpec(
+                name="fetch_url",
+                description="Fetch the text of one public web page. Refuses local or private addresses.",
+                parameters={
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": ["url"],
+                    "properties": {"url": {"type": "string"}},
                 },
             )
         )
@@ -294,7 +428,9 @@ def system_prompt(version: BotVersion) -> str:
     schema = json.dumps(version.output_schema, indent=2)
     children = ", ".join(version.allowed_bot_ids) or "none"
     rule = (
-        "You must call delegate for the specialist bots before finish."
+        "You must call delegate or delegate_parallel for the specialist bots before finish. "
+        "Delegate calls in the same turn run at the same time. "
+        "Use web_search or fetch_url when the case is missing a public fact."
         if version.require_delegation
         else "Do not delegate. Call finish when the decision is ready."
     )

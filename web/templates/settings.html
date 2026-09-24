@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Settings · Decision Bench{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="eyebrow">Settings</p>
+    <h1>Providers and keys.</h1>
+    <p class="lede">Keys stay in the local database. They are never written into the repo.</p>
+  </div>
+</header>
+{% if error %}<p class="banner">{{ error }}</p>{% endif %}
+{% if notice %}<p class="notice">{{ notice }}</p>{% endif %}
+<section class="stack">
+  {% for provider in provider_rows if provider.name != 'demo' %}
+  <details class="provider-card">
+    <summary>
+      <span class="grow">{{ provider.name }}</span>
+      <span class="pill {{ 'pass' if provider.configured else 'fail' }}">{% if provider.configured %}ready{% else %}off{% endif %}</span>
+      <span class="label">{{ provider.kind }}</span>
+    </summary>
+    <form class="form" method="post" action="/settings/providers">
+    <input type="hidden" name="name" value="{{ provider.name }}">
+    <input type="hidden" name="kind" value="{{ provider.kind }}">
+    <p class="label">{{ provider.kind }}{% if provider.builtin %} · built in{% endif %}{% if provider.key_hint %} · {{ provider.key_hint }}{% endif %}</p>
+    <div class="split">
+      <label>
+        <span>Base URL</span>
+        <input name="base_url" value="{{ provider.base_url }}" required>
+      </label>
+      <label>
+        <span>Default model</span>
+        <input name="default_model" value="{{ provider.default_model }}" required>
+      </label>
+    </div>
+    <label>
+      <span>API key</span>
+      <input name="api_key" type="password" autocomplete="off" placeholder="{% if provider.key_hint %}Leave blank to keep the saved key{% else %}Paste the API key{% endif %}">
+    </label>
+    <label class="check">
+      <input type="checkbox" name="enabled" {% if provider.enabled %}checked{% endif %}>
+      <span>Enabled</span>
+    </label>
+    <div class="row-actions">
+      <button class="button" type="submit">Save</button>
+    </div>
+    </form>
+    {% if not provider.builtin %}
+    <form method="post" action="/settings/providers/{{ provider.name }}/delete">
+      <button class="button ghost" type="submit">Remove {{ provider.name }}</button>
+    </form>
+    {% endif %}
+  </details>
+  {% endfor %}
+</section>
+<section class="panel">
+  <h2>Add a provider</h2>
+  <p class="lede">Free chat and search slots from the public API list are already on this page. Paste a key and enable the ones you want. Ollama and LM Studio can stay without a key when they run on this machine.</p>
+  <form class="form" method="post" action="/settings/providers">
+    <div class="split">
+      <label>
+        <span>Name</span>
+        <input name="name" required placeholder="groq" pattern="[a-z][a-z0-9-]{1,31}">
+      </label>
+      <label>
+        <span>Kind</span>
+        <select name="kind">
+          <option value="openai">OpenAI-compatible</option>
+          <option value="gemini">Gemini</option>
+          <option value="search">Web search</option>
+        </select>
+      </label>
+    </div>
+    <label>
+      <span>Base URL</span>
+      <input name="base_url" required placeholder="https://api.groq.com/openai/v1">
+    </label>
+    <div class="split">
+      <label>
+        <span>Default model</span>
+        <input name="default_model" required placeholder="llama-3.3-70b-versatile">
+      </label>
+      <label>
+        <span>API key</span>
+        <input name="api_key" type="password" autocomplete="off" required>
+      </label>
+    </div>
+    <label class="check">
+      <input type="checkbox" name="enabled" checked>
+      <span>Enabled</span>
+    </label>
+    <button class="button" type="submit">Add provider</button>
+  </form>
+</section>
+{% endblock %}

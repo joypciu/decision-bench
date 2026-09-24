@@ -12,6 +12,7 @@ from decision_bench.providers.http import parse_arguments, post_json
 class GeminiProvider:
     name = "gemini"
     configured = True
+    default_model = ""
 
     def __init__(
         self,

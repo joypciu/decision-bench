@@ -22,7 +22,7 @@
       <label>
         <span>Provider</span>
         <select name="provider">
-          {% for provider in provider_rows %}
+          {% for provider in chat_provider_rows %}
           <option value="{{ provider.name }}" {% if latest.provider == provider.name %}selected{% endif %}>{{ provider.name }}{% if not provider.configured %} — key required{% endif %}</option>
           {% endfor %}
         </select>
@@ -77,5 +77,4 @@
   </form>
 </details>
 <script id="pack-data" type="application/json">{{ pack_options | tojson }}</script>
-<script src="/static/app.js"></script>
 {% endblock %}

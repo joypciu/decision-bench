@@ -11,3 +11,17 @@ if (data && select && schema) {
     }
   });
 }
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute("data-theme", theme);
+  localStorage.setItem("decision-bench-theme", theme);
+  document.querySelectorAll("[data-theme-value]").forEach((button) => {
+    button.setAttribute("aria-pressed", String(button.dataset.themeValue === theme));
+  });
+}
+
+applyTheme(document.documentElement.getAttribute("data-theme") || "light");
+document.querySelectorAll("[data-theme-value]").forEach((button) => {
+  button.addEventListener("click", () => applyTheme(button.dataset.themeValue));
+});
+

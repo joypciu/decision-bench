@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
 
-from decision_bench.domain import Bot, BotVersion, EvalRun, Run, Step
+from decision_bench.domain import Bot, BotVersion, EvalRun, ProviderConfig, Run, Step
 
 
 def now() -> str:
@@ -97,6 +97,17 @@ CREATE TABLE IF NOT EXISTS eval_runs (
     created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS provider_configs (
+    name TEXT PRIMARY KEY,
+    kind TEXT NOT NULL,
+    base_url TEXT NOT NULL,
+    api_key TEXT NOT NULL DEFAULT '',
+    default_model TEXT NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    builtin INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_runs_parent ON runs(parent_run_id);
 CREATE INDEX IF NOT EXISTS idx_runs_created ON runs(created_at);
 CREATE INDEX IF NOT EXISTS idx_steps_run ON steps(run_id, position);
@@ -113,6 +124,7 @@ class SqliteRunStore:
         connection.row_factory = sqlite3.Row
         try:
             connection.execute("PRAGMA foreign_keys = ON")
+            connection.execute("PRAGMA journal_mode = WAL")
             yield connection
             connection.commit()
         except Exception:
@@ -398,6 +410,65 @@ class SqliteRunStore:
         with self._conn() as connection:
             row = connection.execute("SELECT * FROM eval_runs WHERE id = ?", (eval_id,)).fetchone()
         return _eval(row) if row else None
+
+    def list_provider_configs(self) -> list[ProviderConfig]:
+        with self._conn() as connection:
+            rows = connection.execute(
+                "SELECT * FROM provider_configs ORDER BY builtin DESC, name"
+            ).fetchall()
+        return [_provider(row) for row in rows]
+
+    def get_provider_config(self, name: str) -> ProviderConfig | None:
+        with self._conn() as connection:
+            row = connection.execute(
+                "SELECT * FROM provider_configs WHERE name = ?",
+                (name,),
+            ).fetchone()
+        return _provider(row) if row else None
+
+    def upsert_provider_config(self, config: ProviderConfig) -> None:
+        with self._conn() as connection:
+            connection.execute(
+                """
+                INSERT INTO provider_configs (
+                    name, kind, base_url, api_key, default_model, enabled, builtin, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(name) DO UPDATE SET
+                    kind = excluded.kind,
+                    base_url = excluded.base_url,
+                    api_key = excluded.api_key,
+                    default_model = excluded.default_model,
+                    enabled = excluded.enabled,
+                    builtin = excluded.builtin
+                """,
+                (
+                    config.name,
+                    config.kind,
+                    config.base_url,
+                    config.api_key,
+                    config.default_model,
+                    int(config.enabled),
+                    int(config.builtin),
+                    config.created_at,
+                ),
+            )
+
+    def delete_provider_config(self, name: str) -> None:
+        with self._conn() as connection:
+            connection.execute("DELETE FROM provider_configs WHERE name = ?", (name,))
+
+
+def _provider(row: sqlite3.Row) -> ProviderConfig:
+    return ProviderConfig(
+        name=row["name"],
+        kind=row["kind"],
+        base_url=row["base_url"],
+        api_key=row["api_key"],
+        default_model=row["default_model"],
+        enabled=bool(row["enabled"]),
+        builtin=bool(row["builtin"]),
+        created_at=row["created_at"],
+    )
 
 
 def _bot(row: sqlite3.Row) -> Bot:

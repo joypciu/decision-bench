@@ -9,23 +9,26 @@ from decision_bench.ports import ProviderError
 from decision_bench.providers.http import parse_arguments, post_json
 
 
-class OpenRouterProvider:
-    name = "openrouter"
+class OpenAICompatibleProvider:
     configured = True
 
     def __init__(
         self,
         *,
+        name: str,
         api_key: str,
         base_url: str,
         timeout_s: float,
-        detail: str = "OpenRouter",
+        detail: str,
+        default_model: str = "",
         transport: httpx.BaseTransport | None = None,
     ) -> None:
+        self.name = name
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
         self.timeout_s = timeout_s
         self.detail = detail
+        self.default_model = default_model
         self._transport = transport
 
     def complete(
@@ -42,14 +45,33 @@ class OpenRouterProvider:
             "messages": [to_openai_message(message) for message in messages],
             "tools": [to_openai_tool(tool) for tool in tools],
         }
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "HTTP-Referer": "http://localhost:8000",
-            "X-Title": "Decision Bench",
-        }
+        headers = {"Authorization": f"Bearer {self.api_key}"}
+        if self.name == "openrouter":
+            headers["HTTP-Referer"] = "http://localhost:8000"
+            headers["X-Title"] = "Decision Bench"
         with httpx.Client(timeout=self.timeout_s, transport=self._transport) as client:
             data = post_json(client, f"{self.base_url}/chat/completions", headers=headers, payload=payload)
         return parse_openai(data)
+
+
+class OpenRouterProvider(OpenAICompatibleProvider):
+    def __init__(
+        self,
+        *,
+        api_key: str,
+        base_url: str,
+        timeout_s: float,
+        detail: str = "OpenRouter",
+        transport: httpx.BaseTransport | None = None,
+    ) -> None:
+        super().__init__(
+            name="openrouter",
+            api_key=api_key,
+            base_url=base_url,
+            timeout_s=timeout_s,
+            detail=detail,
+            transport=transport,
+        )
 
 
 def to_openai_message(message: Message) -> dict:

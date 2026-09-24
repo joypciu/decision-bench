@@ -23,21 +23,14 @@ pytest
 docker compose up --build
 ```
 
-Put keys in `.env` only. The file is gitignored.
+Put a key in `.env` before the first launch, or add it afterward under **Settings**. The database copy is what the app uses after that. `.env` and the database are gitignored.
 
-- `GEMINI_API_KEY` from [Google AI Studio](https://aistudio.google.com/apikey)
-- `OPENROUTER_API_KEY` from [OpenRouter](https://openrouter.ai/). The default model is `openrouter/free`, which routes to a free model. Free model ids change, so set `OPENROUTER_MODEL` if you want a specific one.
+- `GEMINI_API_KEY` from [Google AI Studio](https://aistudio.google.com/apikey). Default model: `gemini-3.6-flash`.
+- `OPENROUTER_API_KEY` from [OpenRouter](https://openrouter.ai/). Default model: `openrouter/free`.
 
-On the run form, pick `gemini` or `openrouter`. Leave the model blank to use the default in `.env`. The whole spawn tree uses that provider, so an eval compares like with like.
+To add another model, open Settings. Groq, Cerebras, Mistral, Together, Fireworks, DeepInfra, Hugging Face, SambaNova, Ollama, and LM Studio are already listed, using the same OpenAI-compatible chat API documented by each vendor. Tavily, Brave, and Exa are listed as search providers. Paste the API key, enable the row, and save. Ollama (`http://127.0.0.1:11434/v1`) and LM Studio (`http://127.0.0.1:1234/v1`) do not need a key when they are running locally.
 
-## What a recruiter can click
-
-1. Open **Change-risk lead**, paste a diff, run it on `demo`.
-2. Open the run. The lead spawns the security checker and the migration checker. Each node has a schema result, a score, latency, and tokens.
-3. Open **Evals**, run the change-risk pack. Both checked-in cases pass on `demo`.
-4. Create a bot, allow it to spawn an existing bot, and require delegation. The engine rejects a finish that skips that step.
-
-`/docs` is the HTTP API. The UI is a separate client of the same service.
+Bots can call `web_search` without a key. That uses Wikipedia and DuckDuckGo. If a Tavily, Brave, or Exa key is enabled, those results are included too. `fetch_url` reads one public page. Several `delegate` calls in the same turn, or one `delegate_parallel` call, run the child bots at the same time.
 
 ## How a run moves
 
@@ -60,7 +53,7 @@ A run can succeed and still fail the rubric. Success means the JSON matched the 
 
 ## Where to extend it
 
-**Provider.** Implement `complete(model, messages, tools, schema)` and register the class in `src/decision_bench/providers/registry.py`. The engine does not import a vendor SDK.
+**Provider.** Add an OpenAI-compatible endpoint or a Gemini key from Settings. A new Python adapter is only needed for a protocol that is not one of those two. Implement `complete(model, messages, tools, schema)` and register it from `build_providers` in `src/decision_bench/providers/registry.py`.
 
 **Database.** Implement the `RunStore` methods in `src/decision_bench/ports.py`. SQLite is `src/decision_bench/storage/sqlite.py`. The engine receives the store as an argument.
 
@@ -75,7 +68,8 @@ A run can succeed and still fail the rubric. Success means the JSON matched the 
 | Path | Role |
 | --- | --- |
 | `src/decision_bench/engine.py` | Step loop, delegation, schema gate |
-| `src/decision_bench/providers/` | Demo, Gemini, OpenRouter |
+| `src/decision_bench/providers/` | Demo, Gemini, and OpenAI-compatible adapters |
+| `src/decision_bench/provider_admin.py` | Saved provider keys and reload |
 | `src/decision_bench/storage/sqlite.py` | System of record |
 | `src/decision_bench/web/` | HTTP API and HTML client |
 | `web/` | Templates and CSS |
