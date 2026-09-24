@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+import io
 
 
 def test_text_documents_extract_end_to_end(app):
@@ -72,3 +73,27 @@ def test_pdf_extracts_page_text(app):
     )
     assert response.status_code == 200
     assert "Hello PDF" in response.text
+
+
+def test_image_ocr_reads_rendered_text(app):
+    import os
+
+    pytest = __import__("pytest")
+    pytest.importorskip("winocr")
+    font_path = r"C:\Windows\Fonts\arial.ttf"
+    if not os.path.exists(font_path):
+        pytest.skip("Arial is not installed")
+    from PIL import Image, ImageDraw, ImageFont
+
+    image = Image.new("RGB", (640, 180), "white")
+    draw = ImageDraw.Draw(image)
+    draw.text((30, 50), "Hello OCR", fill="black", font=ImageFont.truetype(font_path, 64))
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    client = TestClient(app)
+    response = client.post(
+        "/documents",
+        files={"file": ("scan.png", buffer.getvalue(), "image/png")},
+    )
+    assert response.status_code == 200
+    assert "Hello OCR" in response.text

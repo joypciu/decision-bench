@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import io
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
 MAX_BYTES = 8_000_000
 TEXT_SUFFIXES = {".md", ".txt", ".html", ".htm", ".csv", ".json", ".xml"}
 PDF_SUFFIXES = {".pdf"}
-SUPPORTED = TEXT_SUFFIXES | PDF_SUFFIXES
+IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff"}
+SUPPORTED = TEXT_SUFFIXES | PDF_SUFFIXES | IMAGE_SUFFIXES
 
 
 @dataclass
@@ -24,14 +26,54 @@ def extract_document(data: bytes, filename: str) -> DocumentResult:
         raise ValueError("Files are limited to 8 MB.")
     suffix = Path(filename or "upload.txt").suffix.lower()
     if suffix not in SUPPORTED:
-        raise ValueError("Supported files: md, txt, html, csv, json, xml, pdf.")
+        raise ValueError("Supported files: md, txt, html, csv, json, xml, pdf, png, jpg, webp, gif, bmp, tiff.")
     if suffix in {".md", ".txt"}:
         text = data.decode("utf-8", errors="replace").strip()
+    elif suffix in IMAGE_SUFFIXES:
+        text = ocr_image(data)
     else:
         text = _markitdown(data, suffix)
     if not text:
         raise ValueError("No text could be read from that file.")
     return DocumentResult(filename=Path(filename).name, kind=suffix.lstrip("."), markdown=text[:50_000])
+
+
+def ocr_image(data: bytes) -> str:
+    from PIL import Image
+
+    image = Image.open(io.BytesIO(data))
+    text = _recognize(image).strip()
+    if not text:
+        raise ValueError("OCR found no text in that image.")
+    return text
+
+
+def _recognize(image) -> str:
+    text = _windows_ocr(image)
+    if text:
+        return text
+    if shutil.which("tesseract"):
+        import pytesseract
+
+        return pytesseract.image_to_string(image)
+    raise ValueError("No OCR engine is available. On Windows, install the winocr package.")
+
+
+def _windows_ocr(image) -> str:
+    try:
+        import asyncio
+        from concurrent.futures import ThreadPoolExecutor
+
+        import winocr
+    except Exception:
+        return ""
+
+    def run() -> str:
+        result = asyncio.run(winocr.recognize_pil(image.convert("RGB"), "en"))
+        return (getattr(result, "text", "") or "").strip()
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(run).result()
 
 
 def _markitdown(data: bytes, suffix: str) -> str:
