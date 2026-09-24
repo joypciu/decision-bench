@@ -6,6 +6,8 @@ from pathlib import Path
 
 MAX_BYTES = 8_000_000
 TEXT_SUFFIXES = {".md", ".txt", ".html", ".htm", ".csv", ".json", ".xml"}
+PDF_SUFFIXES = {".pdf"}
+SUPPORTED = TEXT_SUFFIXES | PDF_SUFFIXES
 
 
 @dataclass
@@ -21,8 +23,8 @@ def extract_document(data: bytes, filename: str) -> DocumentResult:
     if len(data) > MAX_BYTES:
         raise ValueError("Files are limited to 8 MB.")
     suffix = Path(filename or "upload.txt").suffix.lower()
-    if suffix not in TEXT_SUFFIXES:
-        raise ValueError("Supported text files: md, txt, html, csv, json, xml.")
+    if suffix not in SUPPORTED:
+        raise ValueError("Supported files: md, txt, html, csv, json, xml, pdf.")
     if suffix in {".md", ".txt"}:
         text = data.decode("utf-8", errors="replace").strip()
     else:
