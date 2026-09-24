@@ -35,7 +35,9 @@ def extract_document(data: bytes, filename: str, crop: tuple[int, int, int, int]
             data = crop_image(data, crop)
         text = ocr_image(data)
     elif suffix in PDF_SUFFIXES and crop is not None:
-        text = ocr_image(crop_pdf(data, page=page, box=crop))
+        text = pdf_crop_text(data, page=page, box=crop)
+        if not text:
+            text = ocr_image(crop_pdf(data, page=page, box=crop))
     elif suffix in PDF_SUFFIXES:
         text = _markitdown(data, suffix)
     else:
@@ -43,6 +45,25 @@ def extract_document(data: bytes, filename: str, crop: tuple[int, int, int, int]
     if not text:
         raise ValueError("No text could be read from that file.")
     return DocumentResult(filename=Path(filename).name, kind=suffix.lstrip("."), markdown=text[:50_000])
+
+
+def pdf_crop_text(data: bytes, page: int, box: tuple[int, int, int, int]) -> str:
+    """Read text whose position falls inside a top-left crop box, in PDF points."""
+    import pypdfium2 as pdfium
+
+    document = pdfium.PdfDocument(data)
+    try:
+        if page < 1 or page > len(document):
+            raise ValueError("That PDF page does not exist.")
+        pdf_page = document[page - 1]
+        width, height = pdf_page.get_size()
+        left, top, right, bottom = box
+        if left < 0 or top < 0 or right > width or bottom > height or left >= right or top >= bottom:
+            raise ValueError("Crop box is outside the PDF page.")
+        text_page = pdf_page.get_textpage()
+        return text_page.get_text_bounded(left, height - bottom, right, height - top).strip()
+    finally:
+        document.close()
 
 
 def crop_pdf(data: bytes, page: int, box: tuple[int, int, int, int]) -> bytes:
