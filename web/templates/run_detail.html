@@ -15,7 +15,7 @@
 {% if node.children %}
 <ul class="child-row">
   {% for child in node.children %}
-  <li><span class="pill {{ child.run.status }}">{{ child.bot_name }}</span> {{ child.run.output | decision or child.run.status }}</li>
+  <li><span class="pill {{ child.run.status }}">{{ child.bot_name }}</span> <span>{{ child.run.provider }}</span> {{ child.run.output | decision or child.run.status }}</li>
   {% endfor %}
 </ul>
 {% endif %}

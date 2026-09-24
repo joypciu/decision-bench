@@ -245,9 +245,17 @@ def handle_delegate(
         return {"error": "Bot not found.", "bot_id": bot_id}, False
     from decision_bench.services import new_run
 
-    override = run.provider != version.provider or run.model != version.model
-    child_provider = run.provider if override else child_version.provider
-    child_model = run.model if override else child_version.model
+    requested = str(arguments.get("provider") or "").strip()
+    if requested:
+        live = providers.get(requested)
+        if live is None or not getattr(live, "configured", False):
+            return {"error": f"Provider {requested} is not available.", "bot_id": bot_id}, False
+        child_provider = requested
+        child_model = getattr(live, "default_model", "") or run.model
+    else:
+        override = run.provider != version.provider or run.model != version.model
+        child_provider = run.provider if override else child_version.provider
+        child_model = run.model if override else child_version.model
     child = new_run(
         repo,
         version=child_version,
@@ -278,8 +286,15 @@ def order_tool_calls(calls: list) -> list:
 
 
 def run_parallel_tools(repo, providers, packs, run, version, delegate_calls, parallel_calls, io_calls):
-    def one(bot_id: str, task: str) -> dict:
-        payload, _ok = handle_delegate(repo, providers, packs, run, version, {"bot_id": bot_id, "task": task})
+    def one(bot_id: str, task: str, provider: str = "") -> dict:
+        payload, _ok = handle_delegate(
+            repo,
+            providers,
+            packs,
+            run,
+            version,
+            {"bot_id": bot_id, "task": task, "provider": provider},
+        )
         return payload
 
     def io(call, arguments: dict) -> dict:
@@ -290,23 +305,30 @@ def run_parallel_tools(repo, providers, packs, run, version, delegate_calls, par
     singles = []
     for call in delegate_calls:
         arguments = call.arguments if isinstance(call.arguments, dict) else {}
-        singles.append((call, str(arguments.get("bot_id") or ""), str(arguments.get("task") or "")))
+        singles.append(
+            (
+                call,
+                str(arguments.get("bot_id") or ""),
+                str(arguments.get("task") or ""),
+                str(arguments.get("provider") or ""),
+            )
+        )
     ios = []
     for call in io_calls:
         arguments = call.arguments if isinstance(call.arguments, dict) else {}
         ios.append((call, arguments))
 
     results = []
-    batch = [("delegate", call, bot_id, task) for call, bot_id, task in singles]
-    batch += [("io", call, arguments, "") for call, arguments in ios]
+    batch = [("delegate", call, bot_id, task, provider) for call, bot_id, task, provider in singles]
+    batch += [("io", call, arguments, "", "") for call, arguments in ios]
     if len(batch) == 1 and batch[0][0] == "delegate":
-        call, bot_id, task = singles[0]
-        results.append((call, one(bot_id, task)))
+        call, bot_id, task, provider = singles[0]
+        results.append((call, one(bot_id, task, provider)))
     elif batch:
         def run_item(item):
-            kind, call, first, second = item
+            kind, call, first, second, third = item
             if kind == "delegate":
-                return call, one(first, second)
+                return call, one(first, second, third)
             return call, io(call, first)
 
         with ThreadPoolExecutor(max_workers=min(4, len(batch))) as pool:
@@ -316,7 +338,11 @@ def run_parallel_tools(repo, providers, packs, run, version, delegate_calls, par
         arguments = call.arguments if isinstance(call.arguments, dict) else {}
         tasks = arguments.get("tasks") if isinstance(arguments.get("tasks"), list) else []
         pairs = [
-            (str(item.get("bot_id") or ""), str(item.get("task") or ""))
+            (
+                str(item.get("bot_id") or ""),
+                str(item.get("task") or ""),
+                str(item.get("provider") or ""),
+            )
             for item in tasks
             if isinstance(item, dict)
         ]
@@ -324,7 +350,7 @@ def run_parallel_tools(repo, providers, packs, run, version, delegate_calls, par
             results.append((call, {"error": "Each task needs bot_id and task."}))
             continue
         with ThreadPoolExecutor(max_workers=min(4, len(pairs))) as pool:
-            payloads = list(pool.map(lambda item: one(item[0], item[1]), pairs))
+            payloads = list(pool.map(lambda item: one(item[0], item[1], item[2]), pairs))
         results.append((call, {"results": payloads}))
     return results
 
@@ -358,6 +384,10 @@ def tool_specs(version: BotVersion) -> list[ToolSpec]:
                     "properties": {
                         "bot_id": {"type": "string", "enum": list(version.allowed_bot_ids)},
                         "task": {"type": "string"},
+                        "provider": {
+                            "type": "string",
+                            "description": "Optional configured provider for this child. Omit to use the child bot's saved provider.",
+                        },
                     },
                 },
             )
@@ -380,6 +410,7 @@ def tool_specs(version: BotVersion) -> list[ToolSpec]:
                                 "properties": {
                                     "bot_id": {"type": "string", "enum": list(version.allowed_bot_ids)},
                                     "task": {"type": "string"},
+                                    "provider": {"type": "string"},
                                 },
                             },
                         }

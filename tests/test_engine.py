@@ -253,6 +253,48 @@ def test_search_and_delegate_run_in_one_turn(app, monkeypatch):
     assert children[0].output["risk_level"] == "high"
 
 
+def test_delegate_can_choose_a_provider_for_one_child(app):
+    state = app.state.work
+    state.providers["script"] = ScriptProvider(
+        [
+            completion(
+                [
+                    ToolCall("a", "delegate", {"bot_id": "security-checker", "task": "Review.", "provider": "demo"}),
+                    ToolCall("b", "delegate", {"bot_id": "migration-checker", "task": "Review.", "provider": "missing"}),
+                ]
+            ),
+            finish({"answer": "split"}),
+        ]
+    )
+    parent, _version = create_bot(
+        state,
+        name="Split lead",
+        summary="",
+        instructions="Delegate.",
+        provider="script",
+        model="script",
+        pack_id=None,
+        output_schema=SCHEMA,
+        allowed_tools=["delegate", "finish"],
+        allowed_bot_ids=["security-checker", "migration-checker"],
+        max_steps=3,
+        max_child_depth=1,
+        max_tokens=4000,
+        require_delegation=True,
+    )
+    run = start_run(state, bot_id=parent.id, text="readme only", provider="script", model="script")
+    children = state.repo.list_children(run.id)
+    steps = state.repo.list_steps(run.id)
+    assert run.status == "succeeded"
+    assert len(children) == 1
+    assert children[0].bot_id == "security-checker"
+    assert children[0].provider == "demo"
+    assert any(
+        str((step.payload or {}).get("error") or "").startswith("Provider missing")
+        for step in steps
+    )
+
+
 def test_token_budget_stops_the_run(app):
     state = app.state.work
     state.providers["script"] = ScriptProvider(
