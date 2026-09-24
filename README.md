@@ -26,7 +26,7 @@ docker compose up --build
 Put keys in `.env` only. The file is gitignored.
 
 - `GEMINI_API_KEY` from [Google AI Studio](https://aistudio.google.com/apikey)
-- `OPENROUTER_API_KEY` from [OpenRouter](https://openrouter.ai/). Set `OPENROUTER_MODEL` to a current free model id; free ids change.
+- `OPENROUTER_API_KEY` from [OpenRouter](https://openrouter.ai/). The default model is `openrouter/free`, which routes to a free model. Free model ids change, so set `OPENROUTER_MODEL` if you want a specific one.
 
 On the run form, pick `gemini` or `openrouter`. Leave the model blank to use the default in `.env`. The whole spawn tree uses that provider, so an eval compares like with like.
 

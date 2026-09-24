@@ -2,8 +2,8 @@ import json
 
 import httpx
 
-from decision_bench.domain import Message, ToolSpec
-from decision_bench.providers.gemini import GeminiProvider, to_gemini_schema
+from decision_bench.domain import Message, ToolCall, ToolSpec
+from decision_bench.providers.gemini import GeminiProvider, to_gemini_contents, to_gemini_schema
 from decision_bench.providers.openrouter import OpenRouterProvider
 
 
@@ -19,6 +19,22 @@ def test_gemini_schema_uses_api_types():
     assert converted["type"] == "OBJECT"
     assert converted["properties"]["verdict"]["type"] == "STRING"
     assert "additionalProperties" not in converted
+
+
+def test_gemini_replays_thought_signatures():
+    contents = to_gemini_contents(
+        [
+            Message(
+                role="assistant",
+                tool_calls=[
+                    ToolCall("call_0", "read_case", {}, thought_signature="sig-1"),
+                ],
+            )
+        ]
+    )
+    part = contents[0]["parts"][0]
+    assert part["functionCall"]["name"] == "read_case"
+    assert part["thoughtSignature"] == "sig-1"
 
 
 def test_gemini_parses_a_function_call():
@@ -46,7 +62,7 @@ def test_gemini_parses_a_function_call():
         transport=httpx.MockTransport(handler),
     )
     completion = provider.complete(
-        model="gemini-2.5-flash",
+        model="gemini-3.6-flash",
         messages=[Message(role="user", content="case")],
         tools=[ToolSpec("finish", "done", {"type": "object"})],
         schema={},

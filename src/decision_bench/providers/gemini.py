@@ -78,7 +78,11 @@ def to_gemini_contents(messages: list[Message]) -> list[dict]:
         if message.content:
             parts.append({"text": message.content})
         for call in message.tool_calls or []:
-            parts.append({"functionCall": {"name": call.name, "args": call.arguments}})
+            function_call: dict[str, Any] = {"name": call.name, "args": call.arguments}
+            part: dict[str, Any] = {"functionCall": function_call}
+            if call.thought_signature:
+                part["thoughtSignature"] = call.thought_signature
+            parts.append(part)
         if parts:
             contents.append({"role": "model" if message.role == "assistant" else "user", "parts": parts})
     if not contents:
@@ -128,11 +132,13 @@ def parse_gemini(data: dict) -> Completion:
             texts.append(part["text"])
         function_call = part.get("functionCall")
         if function_call:
+            signature = part.get("thoughtSignature") or function_call.get("thoughtSignature")
             calls.append(
                 ToolCall(
                     id=f"call_{index}",
                     name=function_call["name"],
                     arguments=parse_arguments(function_call.get("args") or {}),
+                    thought_signature=signature,
                 )
             )
     usage = data.get("usageMetadata") or {}

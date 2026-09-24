@@ -9,9 +9,9 @@ services:
       DATABASE_PATH: /data/decision_bench.sqlite
       DECISION_BENCH_ROOT: /app
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.6-flash}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
-      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-meta-llama/llama-3.3-70b-instruct:free}
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-openrouter/free}
     volumes:
       - bench-data:/data
 
