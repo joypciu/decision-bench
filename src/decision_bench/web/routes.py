@@ -203,7 +203,7 @@ def register_routes(app: FastAPI) -> None:
             if upload is None or not getattr(upload, "filename", ""):
                 raise ValueError("Choose a file.")
             data = await upload.read()
-            result = extract_document(data, upload.filename)
+            result = extract_document(data, upload.filename, crop=crop_box(form))
         except ValueError as exc:
             return render(request, "documents.html", status_code=400, active="documents", error=str(exc), result=None)
         return render(request, "documents.html", active="documents", error=None, result=result)
@@ -471,6 +471,17 @@ def form_provider_body(form) -> dict:
         "default_model": str(form.get("default_model") or ""),
         "enabled": form.get("enabled") == "on",
     }
+
+
+def crop_box(form) -> tuple[int, int, int, int] | None:
+    raw = [form.get(name) for name in ("crop_left", "crop_top", "crop_right", "crop_bottom")]
+    if all(value in (None, "") for value in raw):
+        return None
+    try:
+        left, top, right, bottom = (int(value) for value in raw)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Crop values must be whole numbers.") from exc
+    return left, top, right, bottom
 
 
 def parse_int(value, label: str) -> int:

@@ -97,3 +97,31 @@ def test_image_ocr_reads_rendered_text(app):
     )
     assert response.status_code == 200
     assert "Hello OCR" in response.text
+
+
+def test_image_crop_keeps_only_the_selected_text(app):
+    import os
+
+    pytest = __import__("pytest")
+    pytest.importorskip("winocr")
+    font_path = r"C:\Windows\Fonts\arial.ttf"
+    if not os.path.exists(font_path):
+        pytest.skip("Arial is not installed")
+    from PIL import Image, ImageDraw, ImageFont
+
+    image = Image.new("RGB", (800, 180), "white")
+    draw = ImageDraw.Draw(image)
+    font = ImageFont.truetype(font_path, 56)
+    draw.text((20, 50), "KEEP", fill="black", font=font)
+    draw.text((460, 50), "DROP", fill="black", font=font)
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    client = TestClient(app)
+    response = client.post(
+        "/documents",
+        data={"crop_left": "0", "crop_top": "0", "crop_right": "280", "crop_bottom": "180"},
+        files={"file": ("scan.png", buffer.getvalue(), "image/png")},
+    )
+    assert response.status_code == 200
+    assert "KEEP" in response.text
+    assert "DROP" not in response.text

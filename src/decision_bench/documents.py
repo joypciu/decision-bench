@@ -19,7 +19,7 @@ class DocumentResult:
     markdown: str
 
 
-def extract_document(data: bytes, filename: str) -> DocumentResult:
+def extract_document(data: bytes, filename: str, crop: tuple[int, int, int, int] | None = None, page: int = 1) -> DocumentResult:
     if not data:
         raise ValueError("The file is empty.")
     if len(data) > MAX_BYTES:
@@ -30,12 +30,27 @@ def extract_document(data: bytes, filename: str) -> DocumentResult:
     if suffix in {".md", ".txt"}:
         text = data.decode("utf-8", errors="replace").strip()
     elif suffix in IMAGE_SUFFIXES:
+        if crop is not None:
+            data = crop_image(data, crop)
         text = ocr_image(data)
     else:
         text = _markitdown(data, suffix)
     if not text:
         raise ValueError("No text could be read from that file.")
     return DocumentResult(filename=Path(filename).name, kind=suffix.lstrip("."), markdown=text[:50_000])
+
+
+def crop_image(data: bytes, box: tuple[int, int, int, int]) -> bytes:
+    from PIL import Image
+
+    image = Image.open(io.BytesIO(data))
+    left, top, right, bottom = box
+    if left < 0 or top < 0 or right > image.width or bottom > image.height or left >= right or top >= bottom:
+        raise ValueError("Crop box is outside the image.")
+    cropped = image.crop((left, top, right, bottom))
+    buffer = io.BytesIO()
+    cropped.save(buffer, format="PNG")
+    return buffer.getvalue()
 
 
 def ocr_image(data: bytes) -> str:
