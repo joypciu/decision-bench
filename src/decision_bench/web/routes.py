@@ -8,6 +8,7 @@ from urllib.parse import quote
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.responses import RedirectResponse
 
+from decision_bench.documents import extract_document
 from decision_bench.domain import BotVersion
 from decision_bench.present import decision_of, summary_of
 from decision_bench.provider_admin import public_provider, remove_provider, save_provider
@@ -189,6 +190,23 @@ def register_routes(app: FastAPI) -> None:
             return RedirectResponse(f"/bots/{form.get('bot_id')}?error={quote(str(exc))}", status_code=303)
         background.add_task(perform_run, state, run.id)
         return RedirectResponse(f"/runs/{run.id}", status_code=303)
+
+    @app.get("/documents")
+    def documents_page(request: Request):
+        return render(request, "documents.html", active="documents", error=None, result=None)
+
+    @app.post("/documents")
+    async def documents_extract(request: Request):
+        form = await request.form()
+        upload = form.get("file")
+        try:
+            if upload is None or not getattr(upload, "filename", ""):
+                raise ValueError("Choose a file.")
+            data = await upload.read()
+            result = extract_document(data, upload.filename)
+        except ValueError as exc:
+            return render(request, "documents.html", status_code=400, active="documents", error=str(exc), result=None)
+        return render(request, "documents.html", active="documents", error=None, result=result)
 
     @app.get("/runs/{run_id}")
     def run_page(request: Request, run_id: str):
