@@ -4,7 +4,44 @@ import httpx
 
 from decision_bench.domain import Message, ToolCall, ToolSpec
 from decision_bench.providers.gemini import GeminiProvider, to_gemini_contents, to_gemini_schema
+from decision_bench.providers.http import provider_error_message
 from decision_bench.providers.openrouter import OpenRouterProvider
+
+
+def test_provider_error_message_uses_the_api_message():
+    response = httpx.Response(429, json={"error": {"code": 429, "message": "Quota exceeded."}})
+    assert provider_error_message(response) == "HTTP 429: Quota exceeded."
+
+
+def test_gemini_retries_a_temporary_503():
+    calls = {"count": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        del request
+        calls["count"] += 1
+        if calls["count"] == 1:
+            return httpx.Response(503, json={"error": {"message": "busy"}})
+        return httpx.Response(
+            200,
+            json={
+                "candidates": [{"content": {"parts": [{"text": "ok"}]}}],
+                "usageMetadata": {},
+            },
+        )
+
+    provider = GeminiProvider(
+        api_key="test-key",
+        base_url="https://example.test/v1beta",
+        timeout_s=5,
+        transport=httpx.MockTransport(handler),
+    )
+    provider.complete(
+        model="gemini-3.6-flash",
+        messages=[Message(role="user", content="case")],
+        tools=[ToolSpec("finish", "done", {"type": "object"})],
+        schema={},
+    )
+    assert calls["count"] == 2
 
 
 def test_gemini_schema_uses_api_types():

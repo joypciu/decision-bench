@@ -16,6 +16,8 @@
 
 * { box-sizing: border-box; }
 
+html, body { max-width: 100%; }
+
 body {
   margin: 0;
   background: var(--paper);
@@ -37,7 +39,7 @@ a { color: inherit; }
 
 .shell {
   display: grid;
-  grid-template-columns: 240px 1fr;
+  grid-template-columns: minmax(0, 240px) minmax(0, 1fr);
   min-height: 100vh;
 }
 
@@ -169,11 +171,15 @@ fieldset { border: 1px solid var(--line); border-radius: 12px; display: flex; fl
 details summary { cursor: pointer; font-family: "Source Serif 4", Georgia, serif; font-size: 1.25rem; }
 
 @media (max-width: 900px) {
-  .shell { grid-template-columns: 1fr; }
+  body { overflow-x: clip; }
+  .shell { grid-template-columns: minmax(0, 1fr); }
+  .rail, main, .panel, .page-head { min-width: 0; }
   .rail { padding: 1rem; }
   .rail nav { flex-direction: row; flex-wrap: wrap; }
-  .providers { flex-direction: row; margin-top: 0; }
+  .providers { flex-direction: row; flex-wrap: wrap; margin-top: 0; }
   main { padding: 1.1rem; }
-  .stats, .two, .split, .split.three, .bot-row, .page-head { grid-template-columns: 1fr; display: grid; }
+  .stats, .two, .split, .split.three, .bot-row, .page-head { grid-template-columns: minmax(0, 1fr); display: grid; }
+  h1, .mark, .rail-note { overflow-wrap: anywhere; }
+  .panel { overflow-x: auto; }
   h1 { font-size: 2rem; }
 }
