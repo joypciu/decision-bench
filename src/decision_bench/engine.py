@@ -299,7 +299,15 @@ def run_parallel_tools(repo, providers, packs, run, version, delegate_calls, par
 
     def io(call, arguments: dict) -> dict:
         if call.name == "web_search":
-            return web_search(str(arguments.get("query") or ""), repo.list_provider_configs())
+            query = str(arguments.get("query") or "")
+            prior = sum(1 for step in repo.list_steps(run.id) if step.name == "web_search")
+            if prior >= 1:
+                return {
+                    "query": query,
+                    "results": [],
+                    "note": "Search limit reached. Do not search again. Finish from the case and earlier results.",
+                }
+            return web_search(query, repo.list_provider_configs())
         return fetch_url(str(arguments.get("url") or ""))
 
     singles = []
@@ -327,9 +335,12 @@ def run_parallel_tools(repo, providers, packs, run, version, delegate_calls, par
     elif batch:
         def run_item(item):
             kind, call, first, second, third = item
-            if kind == "delegate":
-                return call, one(first, second, third)
-            return call, io(call, first)
+            try:
+                if kind == "delegate":
+                    return call, one(first, second, third)
+                return call, io(call, first)
+            except Exception as exc:
+                return call, {"error": str(exc)[:300]}
 
         with ThreadPoolExecutor(max_workers=min(4, len(batch))) as pool:
             results.extend(pool.map(run_item, batch))

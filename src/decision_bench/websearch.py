@@ -23,8 +23,19 @@ def web_search(query: str, configs: list[ProviderConfig], get: Get | None = None
     fetch = get or _http_get
     results: list[dict[str, str]] = []
     results.extend(_configured_search(cleaned, configs, fetch))
-    results.extend(_wikipedia(cleaned, fetch))
-    results.extend(_duckduckgo(cleaned, fetch))
+    try:
+        results.extend(_wikipedia(cleaned, fetch))
+    except Exception:
+        pass
+    try:
+        results.extend(_duckduckgo(cleaned, fetch))
+    except Exception:
+        pass
+    if get is None:
+        try:
+            results.extend(_duckduckgo_html(cleaned))
+        except Exception:
+            pass
     unique = []
     seen = set()
     for item in results:
@@ -35,6 +46,12 @@ def web_search(query: str, configs: list[ProviderConfig], get: Get | None = None
         unique.append(item)
         if len(unique) == 6:
             break
+    if not unique:
+        return {
+            "query": cleaned,
+            "results": [],
+            "note": "No results. Do not search again. Finish from the case.",
+        }
     return {"query": cleaned, "results": unique}
 
 
@@ -127,6 +144,36 @@ def _wikipedia(query: str, get: Get) -> list[dict[str, str]]:
     return results
 
 
+def _duckduckgo_html(query: str) -> list[dict[str, str]]:
+    headers = {"User-Agent": "DecisionBench/0.1 (https://github.com/joypciu/decision-bench)"}
+    with httpx.Client(timeout=12, follow_redirects=True) as client:
+        response = client.post("https://html.duckduckgo.com/html/", data={"q": query}, headers=headers)
+        response.raise_for_status()
+    return parse_duckduckgo_html(response.text)
+
+
+def parse_duckduckgo_html(html: str) -> list[dict[str, str]]:
+    links = re.findall(r'class="result__a"[^>]*href="([^"]+)"[^>]*>(.*?)</a>', html, flags=re.I | re.S)
+    snippets = re.findall(r'class="result__snippet"[^>]*>(.*?)</(?:a|td|span)>', html, flags=re.I | re.S)
+    results = []
+    for index, (href, title) in enumerate(links[:5]):
+        url = _unwrap_duckduckgo_url(href)
+        if not url.startswith("http"):
+            continue
+        snippet = plain_text(snippets[index]) if index < len(snippets) else ""
+        results.append({"title": plain_text(title)[:160], "url": url, "snippet": snippet[:500], "source": "duckduckgo"})
+    return results
+
+
+def _unwrap_duckduckgo_url(href: str) -> str:
+    from urllib.parse import parse_qs, unquote, urlparse
+
+    if "uddg=" not in href:
+        return unescape(href)
+    query = parse_qs(urlparse(href).query)
+    return unquote(query.get("uddg", [href])[0])
+
+
 def _duckduckgo(query: str, get: Get) -> list[dict[str, str]]:
     payload = get(
         "https://api.duckduckgo.com/",
@@ -217,14 +264,17 @@ def _exa(query: str, config: ProviderConfig, get: Get) -> list[dict[str, str]]:
 
 
 def _http_get(url: str, params=None, json=None, headers=None):
-    with httpx.Client(timeout=12, follow_redirects=False) as client:
+    merged = {"User-Agent": "DecisionBench/0.1 (https://github.com/joypciu/decision-bench)"}
+    if headers:
+        merged.update(headers)
+    with httpx.Client(timeout=12, follow_redirects=True) as client:
         if json is not None:
-            response = client.post(url, json=json, headers=headers)
+            response = client.post(url, json=json, headers=merged)
         else:
-            response = client.get(url, params=params, headers=headers)
+            response = client.get(url, params=params, headers=merged)
         response.raise_for_status()
         content_type = response.headers.get("content-type", "")
-        if "json" in content_type or response.text[:1] in "{[":
+        if "json" in content_type or (response.text[:1] in "{["):
             return response.json()
         return response.text[:20000]
 

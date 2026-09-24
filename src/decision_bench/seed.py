@@ -85,12 +85,13 @@ def seed_templates(repo: RunStore, packs: dict[str, TaskPack]) -> None:
         name="Security checker",
         summary="Flags weakened authentication and exposed secrets.",
         instructions=(
-            "You review a diff for authentication, authorization, and secret handling. "
+            "You review a diff for authentication, authorization, and secret handling only. "
+            "Do not search the web and do not comment on migrations or dependencies. "
             "Call finish with risk_level high when the change weakens an auth check or exposes a secret. "
             "Otherwise use risk_level none. Cite the file."
         ),
         schema=SECURITY_SCHEMA,
-        tools=["read_case", "web_search", "fetch_url", "finish"],
+        tools=["read_case", "finish"],
         children=[],
         require_delegation=False,
         max_steps=3,
@@ -103,11 +104,12 @@ def seed_templates(repo: RunStore, packs: dict[str, TaskPack]) -> None:
         name="Migration checker",
         summary="Flags database schema changes.",
         instructions=(
-            "You review a diff for database migrations. Call finish with risk_level high when the diff "
-            "adds a migration, ALTER TABLE, or DROP TABLE. Otherwise use risk_level none."
+            "You review a diff for database migrations only. Do not search the web and do not comment on auth. "
+            "Call finish with risk_level high when the diff adds a migration, ALTER TABLE, or DROP TABLE. "
+            "Otherwise use risk_level none."
         ),
         schema=MIGRATION_SCHEMA,
-        tools=["read_case", "web_search", "fetch_url", "finish"],
+        tools=["read_case", "finish"],
         children=[],
         require_delegation=False,
         max_steps=3,
@@ -120,11 +122,11 @@ def seed_templates(repo: RunStore, packs: dict[str, TaskPack]) -> None:
         name="Research checker",
         summary="Looks up public sources when the case is missing a fact.",
         instructions=(
-            "You search for public facts the case does not already contain. "
-            "Call web_search when a name, product, or error needs an outside source. "
-            "Call fetch_url only for a public http or https page. "
-            "Then finish with a short summary and the sources you actually used. "
-            "If the case is self-contained, finish with an empty sources list."
+            "You are the only bot that should search. Call web_search once for a product, version, or advisory named in the case. "
+            "Then finish. The summary must describe only that external lookup, not auth changes or migrations. "
+            "sources must be the titles and URLs returned by search. "
+            "If the search note says there are no results, finish with an empty sources list. Do not search a second time. "
+            "If the case names no external product or version, finish with an empty sources list and do not search."
         ),
         schema=RESEARCH_SCHEMA,
         tools=["read_case", "web_search", "fetch_url", "finish"],
@@ -140,12 +142,14 @@ def seed_templates(repo: RunStore, packs: dict[str, TaskPack]) -> None:
         name="Change-risk lead",
         summary="Spawns the checkers, then returns ship, revise, or block.",
         instructions=(
-            "You lead a change-risk review. Delegate to security-checker and migration-checker before you finish. "
-            "Return verdict block when the security checker reports risk_level high, revise when only the "
-            "migration checker reports risk_level high, otherwise ship. Put the evidence in summary and risks."
+            "You lead a change-risk review. In one turn, delegate to security-checker, migration-checker, and research-checker. "
+            "Do not search the web yourself. "
+            "Return verdict block when security risk_level is high, when migration risk_level is high, or when research confirms a vulnerable version. "
+            "Otherwise ship. If a child fails, name it and decide from the children that succeeded. "
+            "Put each problem in risks with its file."
         ),
         schema=packs["change_risk"].output_schema,
-        tools=["read_case", "delegate", "delegate_parallel", "web_search", "fetch_url", "finish"],
+        tools=["read_case", "delegate", "delegate_parallel", "finish"],
         children=["security-checker", "migration-checker", "research-checker"],
         require_delegation=True,
         max_steps=6,
@@ -162,7 +166,7 @@ def seed_templates(repo: RunStore, packs: dict[str, TaskPack]) -> None:
             "sev2 means a degraded shared service. sev3 means a narrow impact. Call finish with severity and rationale."
         ),
         schema=SEVERITY_SCHEMA,
-        tools=["read_case", "web_search", "fetch_url", "finish"],
+        tools=["read_case", "finish"],
         children=[],
         require_delegation=False,
         max_steps=3,
@@ -179,7 +183,7 @@ def seed_templates(repo: RunStore, packs: dict[str, TaskPack]) -> None:
             "Call finish with gaps and next_checks."
         ),
         schema=GAPS_SCHEMA,
-        tools=["read_case", "web_search", "fetch_url", "finish"],
+        tools=["read_case", "finish"],
         children=[],
         require_delegation=False,
         max_steps=3,
@@ -197,7 +201,7 @@ def seed_templates(repo: RunStore, packs: dict[str, TaskPack]) -> None:
             "and sev3 for a narrow impact. Return severity, summary, gaps, and next_checks."
         ),
         schema=packs["incident_triage"].output_schema,
-        tools=["read_case", "delegate", "delegate_parallel", "web_search", "fetch_url", "finish"],
+        tools=["read_case", "delegate", "delegate_parallel", "finish"],
         children=["severity-checker", "gaps-checker", "research-checker"],
         require_delegation=True,
         max_steps=6,
@@ -226,9 +230,13 @@ def ensure(
         current = repo.latest_version(bot_id)
         if current is None:
             return
-        missing_tools = not set(tools).issubset(set(current.allowed_tools))
-        missing_children = not set(children).issubset(set(current.allowed_bot_ids))
-        if not missing_tools and not missing_children:
+        next_tools = list(dict.fromkeys(tools))
+        next_children = list(dict.fromkeys(children))
+        if (
+            current.allowed_tools == next_tools
+            and current.allowed_bot_ids == next_children
+            and current.instructions.strip() == instructions.strip()
+        ):
             return
         repo.add_version(
             BotVersion(
@@ -239,9 +247,9 @@ def ensure(
                 provider=current.provider,
                 model=current.model,
                 output_schema=current.output_schema,
-                allowed_tools=list(dict.fromkeys([*current.allowed_tools, *tools])),
-                allowed_bot_ids=list(dict.fromkeys([*current.allowed_bot_ids, *children])),
-                max_steps=current.max_steps,
+                allowed_tools=next_tools,
+                allowed_bot_ids=next_children,
+                max_steps=max(current.max_steps, max_steps),
                 max_child_depth=current.max_child_depth,
                 max_tokens=current.max_tokens,
                 require_delegation=current.require_delegation,
