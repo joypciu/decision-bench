@@ -40,6 +40,35 @@ def test_fetch_url_rejects_a_script_payload():
     assert "article" in page["error"]
 
 
+def test_package_version_search_prefers_the_osv_advisory():
+    def fake_get(url, params=None, json=None, headers=None):
+        del params, headers
+        if "osv.dev" in url:
+            assert json["package"]["name"] == "pyyaml"
+            assert json["version"] == "5.3.1"
+            return {
+                "vulns": [
+                    {
+                        "id": "PYSEC-2020-1",
+                        "summary": "Arbitrary code execution in yaml.load before 5.4.",
+                        "aliases": ["CVE-2020-14343"],
+                        "references": [{"url": "https://nvd.nist.gov/vuln/detail/CVE-2020-14343"}],
+                    }
+                ]
+            }
+        return {
+            "AbstractText": "A blog about loaders.",
+            "AbstractURL": "https://example.com/blog",
+            "Heading": "Blog",
+            "RelatedTopics": [],
+        }
+
+    result = web_search("PyYAML 5.3.1 unsafe load", [], get=fake_get)
+    assert result["results"][0]["source"] == "osv"
+    assert result["results"][0]["url"] == "https://nvd.nist.gov/vuln/detail/CVE-2020-14343"
+    assert "5.4" in result["results"][0]["snippet"]
+
+
 def test_advisory_hosts_sort_ahead_of_other_pages():
     ranked = rank_search_results(
         [

@@ -22,6 +22,10 @@ def web_search(query: str, configs: list[ProviderConfig], get: Get | None = None
         return {"error": "A search query is required.", "results": []}
     fetch = get or _http_get
     results: list[dict[str, str]] = []
+    try:
+        results.extend(_osv(cleaned, fetch))
+    except Exception:
+        pass
     results.extend(_configured_search(cleaned, configs, fetch))
     try:
         results.extend(_wikipedia(cleaned, fetch))
@@ -53,6 +57,49 @@ def web_search(query: str, configs: list[ProviderConfig], get: Get | None = None
             "note": "No results. Do not search again. Finish from the case.",
         }
     return {"query": cleaned, "results": unique}
+
+
+def _osv(query: str, get: Get) -> list[dict[str, str]]:
+    match = re.search(r"([A-Za-z][\w.-]{1,40})\s*(?:==\s*)?(v?\d+\.\d+(?:\.\d+)?)", query)
+    if match is None:
+        return []
+    name = match.group(1).lower()
+    version = match.group(2).lstrip("v")
+    if name in {"cve", "version", "python", "the", "for", "yaml"}:
+        return []
+    payload = get(
+        "https://api.osv.dev/v1/query",
+        json={"version": version, "package": {"name": name, "ecosystem": "PyPI"}},
+    )
+    if not isinstance(payload, dict):
+        return []
+    found = []
+    for vuln in (payload.get("vulns") or [])[:4]:
+        if not isinstance(vuln, dict):
+            continue
+        aliases = [str(item) for item in vuln.get("aliases") or []]
+        cve = next((item for item in aliases if item.startswith("CVE-")), "")
+        url = ""
+        for ref in vuln.get("references") or []:
+            if isinstance(ref, dict) and "nvd.nist.gov" in str(ref.get("url") or ""):
+                url = str(ref["url"])
+                break
+        if not url and cve:
+            url = f"https://nvd.nist.gov/vuln/detail/{cve}"
+        vuln_id = str(vuln.get("id") or "")
+        if not url and vuln_id:
+            url = f"https://osv.dev/vulnerability/{vuln_id}"
+        if not url:
+            continue
+        found.append(
+            {
+                "title": cve or vuln_id or "Advisory",
+                "url": url,
+                "snippet": str(vuln.get("summary") or "")[:500],
+                "source": "osv",
+            }
+        )
+    return found
 
 
 def rank_search_results(items: list[dict[str, str]]) -> list[dict[str, str]]:
