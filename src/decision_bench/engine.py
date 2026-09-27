@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
@@ -345,18 +346,26 @@ def run_parallel_tools(repo, providers, packs, run, version, delegate_calls, par
     def io(call, arguments: dict) -> dict:
         if call.name == "web_search":
             query = str(arguments.get("query") or "")
-            prior = sum(1 for step in repo.list_steps(run.id) if step.name == "web_search")
-            if prior >= 1:
-                return {
-                    "query": query,
-                    "results": [],
-                    "note": "Search limit reached. Do not search again. Finish from the case and earlier results.",
-                }
+            with gate:
+                if used["web_search"] >= 1:
+                    return {
+                        "query": query,
+                        "results": [],
+                        "note": "Search limit reached. Do not search again. Finish from the case and earlier results.",
+                    }
+                used["web_search"] += 1
             return web_search(query, repo.list_provider_configs())
-        prior_fetches = sum(1 for step in repo.list_steps(run.id) if step.name == "fetch_url")
-        if prior_fetches >= 1:
-            return {"error": "Fetch limit reached. Finish from the case and the page you already fetched."}
+        with gate:
+            if used["fetch_url"] >= 1:
+                return {"error": "Fetch limit reached. Finish from the case and the page you already fetched."}
+            used["fetch_url"] += 1
         return fetch_url(str(arguments.get("url") or ""))
+
+    gate = threading.Lock()
+    used = {
+        "web_search": sum(1 for step in repo.list_steps(run.id) if step.name == "web_search"),
+        "fetch_url": sum(1 for step in repo.list_steps(run.id) if step.name == "fetch_url"),
+    }
 
     singles = []
     for call in delegate_calls:

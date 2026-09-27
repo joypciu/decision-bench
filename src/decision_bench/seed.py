@@ -131,7 +131,7 @@ def seed_templates(repo: RunStore, packs: dict[str, TaskPack]) -> None:
             "If the case names no external product or version, finish with an empty sources list and do not search."
         ),
         schema=RESEARCH_SCHEMA,
-        tools=["read_case", "web_search", "fetch_url", "finish"],
+        tools=["web_search", "fetch_url", "finish"],
         children=[],
         require_delegation=False,
         max_steps=5,

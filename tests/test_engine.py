@@ -628,6 +628,62 @@ def test_a_valid_finish_is_kept_when_that_call_crosses_the_token_budget(app):
     assert run.output == {"answer": "kept"}
 
 
+def test_only_one_search_runs_when_two_are_requested_together(app, monkeypatch):
+    calls = []
+
+    def fake_search(query, configs):
+        calls.append(query)
+        return {
+            "query": query,
+            "results": [{"title": "NVD", "url": "https://nvd.nist.gov/vuln/detail/CVE-2020-14343", "snippet": "PyYAML"}],
+        }
+
+    monkeypatch.setattr("decision_bench.engine.web_search", fake_search)
+    state = app.state.work
+    state.providers["script"] = ScriptProvider(
+        [
+            completion(
+                [
+                    ToolCall("s1", "web_search", {"query": "PyYAML 5.3.1"}),
+                    ToolCall("s2", "web_search", {"query": "PyYAML again"}),
+                ]
+            ),
+            finish(
+                {
+                    "summary": "CVE-2020-14343 affects PyYAML before 5.4.",
+                    "sources": [{"title": "NVD", "url": "https://nvd.nist.gov/vuln/detail/CVE-2020-14343"}],
+                }
+            ),
+        ]
+    )
+    bot, _version = create_bot(
+        state,
+        name="Double search",
+        summary="",
+        instructions="Search once.",
+        provider="script",
+        model="script",
+        pack_id=None,
+        output_schema={
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["summary", "sources"],
+            "properties": {"summary": {"type": "string"}, "sources": {"type": "array"}},
+        },
+        allowed_tools=["web_search", "finish"],
+        allowed_bot_ids=[],
+        max_steps=3,
+        max_child_depth=0,
+        max_tokens=4000,
+        require_delegation=False,
+    )
+    run = start_run(state, bot_id=bot.id, text="pyyaml==5.3.1", provider="script", model="script")
+    steps = state.repo.list_steps(run.id)
+    assert run.status == "succeeded"
+    assert calls == ["PyYAML 5.3.1"]
+    assert any("Search limit reached" in str((step.payload or {}).get("note") or "") for step in steps)
+
+
 def test_token_budget_stops_the_run(app):
     state = app.state.work
     state.providers["script"] = ScriptProvider(
