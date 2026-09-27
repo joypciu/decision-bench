@@ -292,11 +292,15 @@ def decision_from_children(version: BotVersion, children: list, reason: str, cas
     failed = [child for child in children if child.status != "succeeded"]
     props = set((version.output_schema.get("properties") or {}).keys())
     excerpt = " ".join(case.split())[:240]
-    note = (excerpt + " Lead model unavailable (" + reason.strip()[:180] + ").").strip()
+    reason_text = reason.strip()[:180]
+    if reason_text.lower().startswith("decided from"):
+        note = (excerpt + " " + reason_text).strip()
+    else:
+        note = (excerpt + " Lead model unavailable (" + reason_text + ").").strip()
     if "severity" in props and "gaps" in props:
         return _incident_from_children(succeeded, failed, note)
     if "verdict" in props and "risks" in props:
-        return _change_from_children(succeeded, failed, note)
+        return _change_from_children(succeeded, failed, note, case)
     return None
 
 
@@ -325,7 +329,7 @@ def _incident_from_children(succeeded: list, failed: list, note: str) -> dict | 
     }
 
 
-def _change_from_children(succeeded: list, failed: list, note: str) -> dict | None:
+def _change_from_children(succeeded: list, failed: list, note: str, case: str = "") -> dict | None:
     if not succeeded:
         return None
     risks = []
@@ -353,7 +357,7 @@ def _change_from_children(succeeded: list, failed: list, note: str) -> dict | No
             risks.append(
                 {
                     "severity": "high",
-                    "file": "requirements.txt",
+                    "file": dependency_file(case),
                     "reason": str(output.get("summary") or "A public advisory matches a pinned version.")[:300],
                 }
             )
@@ -364,6 +368,13 @@ def _change_from_children(succeeded: list, failed: list, note: str) -> dict | No
     if failed:
         failed_note = " Failed checkers: " + ", ".join(child.bot_id for child in failed) + "."
     return {"verdict": verdict, "summary": f"{note}{failed_note}"[:1000], "risks": risks}
+
+
+def dependency_file(case: str) -> str:
+    import re
+
+    match = re.search(r"[\w./-]+\.(?:txt|toml|in)", case, flags=re.IGNORECASE)
+    return match.group(0) if match else "dependency"
 
 
 def complete_run(

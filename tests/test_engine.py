@@ -620,6 +620,8 @@ def test_a_failed_checker_does_not_require_another_lead_model_call(app):
     assert calls == [1]
     assert run.status == "succeeded"
     assert run.output["severity"] == "sev1"
+    assert "Lead model unavailable" not in run.output["summary"]
+    assert "Decided from the checkers" in run.output["summary"]
     assert "429" in " ".join(run.output["gaps"])
 
 
