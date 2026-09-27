@@ -383,9 +383,11 @@ def run_parallel_tools(repo, providers, packs, run, version, delegate_calls, par
         arguments = call.arguments if isinstance(call.arguments, dict) else {}
         ios.append((call, arguments))
 
+    search_ios = [item for item in ios if item[0].name == "web_search"]
+    fetch_ios = [item for item in ios if item[0].name == "fetch_url"]
     results = []
     batch = [("delegate", call, bot_id, task, provider) for call, bot_id, task, provider in singles]
-    batch += [("io", call, arguments, "", "") for call, arguments in ios]
+    batch += [("io", call, arguments, "", "") for call, arguments in search_ios]
     if len(batch) == 1 and batch[0][0] == "delegate":
         call, bot_id, task, provider = singles[0]
         results.append((call, one(bot_id, task, provider)))
@@ -401,6 +403,33 @@ def run_parallel_tools(repo, providers, packs, run, version, delegate_calls, par
 
         with ThreadPoolExecutor(max_workers=min(4, len(batch))) as pool:
             results.extend(pool.map(run_item, batch))
+
+    official = has_official_advisory([payload for _call, payload in results]) or has_official_advisory(
+        [step.payload for step in repo.list_steps(run.id) if step.name == "web_search"]
+    )
+    if fetch_ios and official:
+        for call, arguments in fetch_ios:
+            results.append(
+                (
+                    call,
+                    {
+                        "url": str(arguments.get("url") or ""),
+                        "note": "An official advisory is already in the search results. Finish from those snippets.",
+                    },
+                )
+            )
+    elif fetch_ios:
+        fetch_batch = [("io", call, arguments, "", "") for call, arguments in fetch_ios]
+
+        def run_fetch(item):
+            _kind, call, arguments, _second, _third = item
+            try:
+                return call, io(call, arguments)
+            except Exception as exc:
+                return call, {"error": str(exc)[:300]}
+
+        with ThreadPoolExecutor(max_workers=min(4, len(fetch_batch))) as pool:
+            results.extend(pool.map(run_fetch, fetch_batch))
 
     for call in parallel_calls:
         arguments = call.arguments if isinstance(call.arguments, dict) else {}
@@ -423,9 +452,25 @@ def run_parallel_tools(repo, providers, packs, run, version, delegate_calls, par
     return results
 
 
+def has_official_advisory(payloads) -> bool:
+    for payload in payloads:
+        if not isinstance(payload, dict):
+            continue
+        for item in payload.get("results") or []:
+            if not isinstance(item, dict) or not str(item.get("snippet") or "").strip():
+                continue
+            url = str(item.get("url") or "").lower()
+            if any(part in url for part in ("nvd.nist.gov", "cve.org", "osv.dev", "github.com/advisories")):
+                return True
+    return False
+
+
 def available_tools(version: BotVersion, repo: RunStore, run: Run) -> list[ToolSpec]:
-    used = {step.name for step in repo.list_steps(run.id)}
+    steps = repo.list_steps(run.id)
+    used = {step.name for step in steps}
     hidden = {name for name in ("web_search", "fetch_url", "read_case") if name in used}
+    if has_official_advisory([step.payload for step in steps if step.name == "web_search"]):
+        hidden.add("fetch_url")
     return [spec for spec in tool_specs(version) if spec.name not in hidden]
 
 

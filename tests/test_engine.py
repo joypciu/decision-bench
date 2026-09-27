@@ -552,7 +552,7 @@ def test_used_search_is_not_offered_again(app, monkeypatch):
     assert run.status == "succeeded"
     assert "web_search" in seen[0]
     assert "web_search" not in seen[1]
-    assert "fetch_url" in seen[1]
+    assert "fetch_url" not in seen[1]
 
 
 def test_a_closed_tool_call_does_not_consume_the_step_budget(app, monkeypatch):
@@ -682,6 +682,61 @@ def test_only_one_search_runs_when_two_are_requested_together(app, monkeypatch):
     assert run.status == "succeeded"
     assert calls == ["PyYAML 5.3.1"]
     assert any("Search limit reached" in str((step.payload or {}).get("note") or "") for step in steps)
+
+
+def test_fetch_is_skipped_when_search_already_returned_an_advisory(app, monkeypatch):
+    monkeypatch.setattr(
+        "decision_bench.engine.web_search",
+        lambda query, configs: {
+            "query": query,
+            "results": [{"title": "NVD", "url": "https://nvd.nist.gov/vuln/detail/CVE-2020-14343", "snippet": "PyYAML before 5.4."}],
+        },
+    )
+    fetched = []
+    monkeypatch.setattr("decision_bench.engine.fetch_url", lambda url: fetched.append(url) or {"url": url, "text": "page"})
+    state = app.state.work
+    state.providers["script"] = ScriptProvider(
+        [
+            completion(
+                [
+                    ToolCall("s", "web_search", {"query": "PyYAML 5.3.1"}),
+                    ToolCall("f", "fetch_url", {"url": "https://nvd.nist.gov/vuln/detail/CVE-2020-14343"}),
+                ]
+            ),
+            finish(
+                {
+                    "summary": "CVE-2020-14343 affects PyYAML before 5.4.",
+                    "sources": [{"title": "NVD", "url": "https://nvd.nist.gov/vuln/detail/CVE-2020-14343"}],
+                }
+            ),
+        ]
+    )
+    bot, _version = create_bot(
+        state,
+        name="Skip fetch",
+        summary="",
+        instructions="Search once.",
+        provider="script",
+        model="script",
+        pack_id=None,
+        output_schema={
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["summary", "sources"],
+            "properties": {"summary": {"type": "string"}, "sources": {"type": "array"}},
+        },
+        allowed_tools=["web_search", "fetch_url", "finish"],
+        allowed_bot_ids=[],
+        max_steps=3,
+        max_child_depth=0,
+        max_tokens=4000,
+        require_delegation=False,
+    )
+    run = start_run(state, bot_id=bot.id, text="pyyaml==5.3.1", provider="script", model="script")
+    steps = state.repo.list_steps(run.id)
+    assert run.status == "succeeded"
+    assert fetched == []
+    assert any("official advisory" in str((step.payload or {}).get("note") or "") for step in steps)
 
 
 def test_token_budget_stops_the_run(app):
