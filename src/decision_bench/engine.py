@@ -231,9 +231,115 @@ def execute_run(
                 follow = "Call the finish tool with a schema-valid object."
             messages.append(Message(role="user", content=follow))
     except ProviderError as exc:
+        saved = finish_from_children(repo, packs, run, version, prompt_tokens, completion_tokens, elapsed(), str(exc))
+        if saved is not None:
+            return saved
         return fail(str(exc), last_output)
 
+    saved = finish_from_children(
+        repo, packs, run, version, prompt_tokens, completion_tokens, elapsed(), "Step budget exhausted."
+    )
+    if saved is not None:
+        return saved
     return fail("Step budget exhausted.", last_output)
+
+
+def finish_from_children(repo, packs, run, version, prompt_tokens, completion_tokens, latency_ms, reason: str):
+    children = repo.list_children(run.id)
+    if not children:
+        return None
+    fallback = decision_from_children(version, children, reason)
+    if fallback is None or not schema_check(fallback, version.output_schema).passed:
+        return None
+    return complete_run(
+        repo,
+        packs,
+        run,
+        version,
+        fallback,
+        prompt_tokens,
+        completion_tokens,
+        latency_ms,
+        True,
+    )
+
+
+def decision_from_children(version: BotVersion, children: list, reason: str) -> dict | None:
+    succeeded = [child for child in children if child.status == "succeeded" and isinstance(child.output, dict)]
+    failed = [child for child in children if child.status != "succeeded"]
+    props = set((version.output_schema.get("properties") or {}).keys())
+    note = "Lead model unavailable (" + reason.strip()[:180] + ")."
+    if "severity" in props and "gaps" in props:
+        return _incident_from_children(succeeded, failed, note)
+    if "verdict" in props and "risks" in props:
+        return _change_from_children(succeeded, failed, note)
+    return None
+
+
+def _incident_from_children(succeeded: list, failed: list, note: str) -> dict | None:
+    severity_child = next((child for child in succeeded if child.output.get("severity") and "gaps" not in child.output), None)
+    if severity_child is None:
+        return None
+    gaps_child = next((child for child in succeeded if "gaps" in child.output and "severity" not in child.output), None)
+    if gaps_child is None:
+        gaps = [f"{child.bot_id} did not finish: {child.error or 'no output'}"[:240] for child in failed] or [
+            "The missing-facts checker did not finish."
+        ]
+        checks = ["Retry the missing-facts checker."]
+    else:
+        gaps = [str(item) for item in gaps_child.output.get("gaps") or []] or ["No gap was recorded."]
+        checks = [str(item) for item in gaps_child.output.get("next_checks") or []] or ["Retry the missing-facts checker."]
+    rationale = str(severity_child.output.get("rationale") or severity_child.output.get("severity"))
+    failed_note = ""
+    if failed:
+        failed_note = " Failed checkers: " + ", ".join(child.bot_id for child in failed) + "."
+    return {
+        "severity": severity_child.output["severity"],
+        "summary": f"{note} {rationale}{failed_note}"[:1000],
+        "gaps": gaps,
+        "next_checks": checks,
+    }
+
+
+def _change_from_children(succeeded: list, failed: list, note: str) -> dict | None:
+    if not succeeded:
+        return None
+    risks = []
+    for child in succeeded:
+        output = child.output
+        if output.get("risk_level") == "high" and "findings" in output:
+            for finding in output.get("findings") or []:
+                if isinstance(finding, dict) and finding.get("file"):
+                    risks.append(
+                        {
+                            "severity": "high",
+                            "file": str(finding["file"]),
+                            "reason": str(finding.get("reason") or "Security finding.")[:300],
+                        }
+                    )
+        elif output.get("risk_level") == "high" and "notes" in output:
+            risks.append(
+                {
+                    "severity": "medium" if not risks else "high",
+                    "file": str(output.get("file") or "schema") or "schema",
+                    "reason": str(output.get("notes") or "A database migration needs a second look.")[:300],
+                }
+            )
+        elif output.get("sources"):
+            risks.append(
+                {
+                    "severity": "high",
+                    "file": "requirements.txt",
+                    "reason": str(output.get("summary") or "A public advisory matches a pinned version.")[:300],
+                }
+            )
+    verdict = "ship" if not risks else "block"
+    if len(risks) == 1 and risks[0]["severity"] == "medium":
+        verdict = "revise"
+    failed_note = ""
+    if failed:
+        failed_note = " Failed checkers: " + ", ".join(child.bot_id for child in failed) + "."
+    return {"verdict": verdict, "summary": f"{note}{failed_note}"[:1000], "risks": risks}
 
 
 def complete_run(

@@ -473,6 +473,67 @@ def test_incident_lead_must_keep_the_severity_checker_result(app):
     assert run.output["severity"] == "sev1"
 
 
+def test_a_lead_finishes_from_checkers_when_its_model_becomes_unavailable(app):
+    state = app.state.work
+    provider = ScriptProvider(
+        [
+            completion(
+                [
+                    ToolCall("a", "delegate", {"bot_id": "severity-checker", "task": "Assign severity."}),
+                    ToolCall("b", "delegate", {"bot_id": "gaps-checker", "task": "List gaps."}),
+                    ToolCall("c", "delegate", {"bot_id": "research-checker", "task": "Look up public facts."}),
+                ]
+            )
+        ]
+    )
+    original = provider.complete
+
+    def complete(*, model, messages, tools, schema):
+        if provider.items:
+            return original(model=model, messages=messages, tools=tools, schema=schema)
+        raise ProviderError("HTTP 429: quota")
+
+    provider.complete = complete
+    state.providers["script"] = provider
+    parent, _version = create_bot(
+        state,
+        name="Quota lead",
+        summary="",
+        instructions="Delegate.",
+        provider="script",
+        model="script",
+        pack_id=None,
+        output_schema={
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["severity", "summary", "gaps", "next_checks"],
+            "properties": {
+                "severity": {"type": "string", "enum": ["sev1", "sev2", "sev3"]},
+                "summary": {"type": "string"},
+                "gaps": {"type": "array", "items": {"type": "string"}},
+                "next_checks": {"type": "array", "items": {"type": "string"}},
+            },
+        },
+        allowed_tools=["delegate", "finish"],
+        allowed_bot_ids=["severity-checker", "gaps-checker", "research-checker"],
+        max_steps=3,
+        max_child_depth=1,
+        max_tokens=4000,
+        require_delegation=True,
+    )
+    run = start_run(
+        state,
+        bot_id=parent.id,
+        text="Production API outage. All users are affected and there is data loss.",
+        provider="script",
+        model="script",
+    )
+    assert run.status == "succeeded"
+    assert run.output["severity"] == "sev1"
+    assert "429" in run.output["summary"]
+    assert any("customer communication" in gap.lower() for gap in run.output["gaps"])
+
+
 def test_research_finish_rejects_a_source_the_search_did_not_return(app, monkeypatch):
     monkeypatch.setattr(
         "decision_bench.engine.web_search",
