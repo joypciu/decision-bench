@@ -339,6 +339,40 @@ def test_finish_waits_until_every_specialist_was_called(app):
     assert any("migration-checker" in str((step.payload or {}).get("error") or "") for step in steps)
 
 
+def test_research_summary_cannot_decide_the_pull_request():
+    from decision_bench.engine import research_output_error
+
+    class Step:
+        name = "web_search"
+        payload = {
+            "results": [
+                {
+                    "title": "CVE-2020-14343",
+                    "url": "https://nvd.nist.gov/vuln/detail/CVE-2020-14343",
+                    "snippet": "yaml.load before 5.4 allows arbitrary code execution.",
+                }
+            ]
+        }
+
+    sources = [{"title": "CVE-2020-14343", "url": "https://nvd.nist.gov/vuln/detail/CVE-2020-14343"}]
+    verdict = research_output_error(
+        {
+            "summary": "PyYAML 5.3.1 is covered by CVE-2020-14343, so the pull request should not ship.",
+            "sources": sources,
+        },
+        [Step()],
+    )
+    assert verdict is not None
+    assert "pull request" in verdict
+    assert research_output_error(
+        {
+            "summary": "PyYAML 5.3.1 is affected by CVE-2020-14343. The fix landed in 5.4.",
+            "sources": sources,
+        },
+        [Step()],
+    ) is None
+
+
 def test_research_finish_rejects_a_source_the_search_did_not_return(app, monkeypatch):
     monkeypatch.setattr(
         "decision_bench.engine.web_search",

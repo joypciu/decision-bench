@@ -569,7 +569,18 @@ def research_output_error(output: dict | None, steps: list) -> str | None:
     blob = " ".join(snippets)
     drifted = [
         phrase
-        for phrase in ("auth bypass", "authentication", "drop table", "alter table", "migration", "users table")
+        for phrase in (
+            "auth bypass",
+            "authentication",
+            "drop table",
+            "alter table",
+            "migration",
+            "users table",
+            "pull request",
+            "should not ship",
+            "should ship",
+            "cannot ship",
+        )
         if phrase in str(output.get("summary") or "").lower() and phrase not in blob
     ]
     if drifted:

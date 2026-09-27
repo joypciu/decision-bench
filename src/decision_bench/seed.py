@@ -124,7 +124,8 @@ def seed_templates(repo: RunStore, packs: dict[str, TaskPack]) -> None:
         summary="Looks up public sources when the case is missing a fact.",
         instructions=(
             "You are the only bot that should search. Call web_search once for a product, version, or advisory named in the case. "
-            "Then finish. The summary must describe only that external lookup, not auth changes or migrations. "
+            "Then finish. The summary must describe only that external lookup. "
+            "Do not mention auth, migrations, or whether the pull request should ship. "
             "sources must be the titles and URLs returned by search. "
             "If the search note says there are no results, finish with an empty sources list. Do not search a second time. "
             "If the case names no external product or version, finish with an empty sources list and do not search."
