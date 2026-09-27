@@ -38,7 +38,7 @@ def web_search(query: str, configs: list[ProviderConfig], get: Get | None = None
             pass
     unique = []
     seen = set()
-    for item in results:
+    for item in rank_search_results(results):
         key = (item.get("url") or item.get("title") or "").lower()
         if not key or key in seen:
             continue
@@ -53,6 +53,18 @@ def web_search(query: str, configs: list[ProviderConfig], get: Get | None = None
             "note": "No results. Do not search again. Finish from the case.",
         }
     return {"query": cleaned, "results": unique}
+
+
+def rank_search_results(items: list[dict[str, str]]) -> list[dict[str, str]]:
+    def tier(item: dict[str, str]) -> int:
+        url = (item.get("url") or "").lower()
+        if any(part in url for part in ("nvd.nist.gov", "cve.org", "osv.dev", "github.com/advisories")):
+            return 0
+        if "github.com" in url:
+            return 1
+        return 2
+
+    return sorted(items, key=tier)
 
 
 def fetch_url(url: str, get: Get | None = None) -> dict:

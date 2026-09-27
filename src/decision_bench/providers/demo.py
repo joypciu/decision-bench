@@ -95,7 +95,7 @@ def change_lead(case: str, payloads: list[dict]) -> dict[str, Any]:
         risks.append(
             {
                 "severity": "high" if security_high or research_hit else "medium",
-                "file": "schema",
+                "file": migration_path(payloads),
                 "reason": "A database migration needs a second look.",
             }
         )
@@ -144,8 +144,29 @@ def security_checker(case: str) -> dict[str, Any]:
 def migration_checker(case: str) -> dict[str, Any]:
     lowered = case.lower()
     if any(word in lowered for word in ("drop table", "alter table", "migration")):
-        return {"risk_level": "high", "notes": "A database migration is in the diff."}
-    return {"risk_level": "none", "notes": "No schema change in the diff."}
+        return {
+            "risk_level": "high",
+            "file": migration_file(case),
+            "notes": "A database migration is in the diff.",
+        }
+    return {"risk_level": "none", "file": "", "notes": "No schema change in the diff."}
+
+
+def migration_file(case: str) -> str:
+    import re
+
+    paths = re.findall(r"[\w./-]+\.(?:py|sql)", case, flags=re.IGNORECASE)
+    for path in paths:
+        if "migrat" in path.lower() or "schema" in path.lower():
+            return path
+    return paths[0] if paths else "schema"
+
+
+def migration_path(payloads: list[dict]) -> str:
+    for item in walk(payloads):
+        if item.get("risk_level") == "high" and item.get("file") and "notes" in item:
+            return str(item["file"])
+    return "schema"
 
 
 def classify_severity(case: str) -> str:

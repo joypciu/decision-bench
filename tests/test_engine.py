@@ -461,6 +461,66 @@ def test_lead_must_copy_a_high_finding_into_risks(app):
     assert any("security-checker" in str((step.payload or {}).get("error") or "") for step in steps)
 
 
+def test_used_search_is_not_offered_again(app, monkeypatch):
+    monkeypatch.setattr(
+        "decision_bench.engine.web_search",
+        lambda query, configs: {
+            "query": query,
+            "results": [{"title": "NVD", "url": "https://nvd.nist.gov/vuln/detail/CVE-2020-14343", "snippet": "PyYAML"}],
+        },
+    )
+    state = app.state.work
+    seen = []
+    provider = ScriptProvider(
+        [
+            completion([ToolCall("s", "web_search", {"query": "PyYAML 5.3.1"})]),
+            finish(
+                {
+                    "summary": "CVE-2020-14343 affects PyYAML before 5.4.",
+                    "sources": [{"title": "NVD", "url": "https://nvd.nist.gov/vuln/detail/CVE-2020-14343"}],
+                }
+            ),
+        ]
+    )
+    original = provider.complete
+
+    def complete(*, model, messages, tools, schema):
+        seen.append([tool.name for tool in tools])
+        return original(model=model, messages=messages, tools=tools, schema=schema)
+
+    provider.complete = complete
+    state.providers["script"] = provider
+    bot, _version = create_bot(
+        state,
+        name="One search",
+        summary="",
+        instructions="Search once.",
+        provider="script",
+        model="script",
+        pack_id=None,
+        output_schema={
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["summary", "sources"],
+            "properties": {
+                "summary": {"type": "string"},
+                "sources": {"type": "array"},
+            },
+        },
+        allowed_tools=["web_search", "fetch_url", "finish"],
+        allowed_bot_ids=[],
+        max_steps=3,
+        max_child_depth=0,
+        max_tokens=4000,
+        require_delegation=False,
+    )
+    run = start_run(state, bot_id=bot.id, text="pyyaml==5.3.1", provider="script", model="script")
+    assert run.status == "succeeded"
+    assert "web_search" in seen[0]
+    assert "web_search" not in seen[1]
+    assert "fetch_url" in seen[1]
+
+
 def test_token_budget_stops_the_run(app):
     state = app.state.work
     state.providers["script"] = ScriptProvider(

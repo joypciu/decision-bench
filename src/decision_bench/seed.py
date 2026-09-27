@@ -28,9 +28,10 @@ SECURITY_SCHEMA = {
 MIGRATION_SCHEMA = {
     "type": "object",
     "additionalProperties": False,
-    "required": ["risk_level", "notes"],
+    "required": ["risk_level", "file", "notes"],
     "properties": {
         "risk_level": {"type": "string", "enum": ["none", "low", "high"]},
+        "file": {"type": "string"},
         "notes": {"type": "string"},
     },
 }
@@ -106,7 +107,7 @@ def seed_templates(repo: RunStore, packs: dict[str, TaskPack]) -> None:
         instructions=(
             "You review a diff for database migrations only. Do not search the web and do not comment on auth. "
             "Call finish with risk_level high when the diff adds a migration, ALTER TABLE, or DROP TABLE. "
-            "Otherwise use risk_level none."
+            "Put the changed path in file and one sentence in notes. Otherwise use risk_level none and an empty file."
         ),
         schema=MIGRATION_SCHEMA,
         tools=["read_case", "finish"],
@@ -235,7 +236,8 @@ def ensure(
         if (
             current.allowed_tools == next_tools
             and current.allowed_bot_ids == next_children
-            and             current.instructions.strip() == instructions.strip()
+            and current.instructions.strip() == instructions.strip()
+            and current.output_schema == schema
             and current.max_steps >= max_steps
         ):
             return
@@ -247,7 +249,7 @@ def ensure(
                 instructions=instructions,
                 provider=current.provider,
                 model=current.model,
-                output_schema=current.output_schema,
+                output_schema=schema,
                 allowed_tools=next_tools,
                 allowed_bot_ids=next_children,
                 max_steps=max(current.max_steps, max_steps),

@@ -1,5 +1,5 @@
 from decision_bench.domain import ProviderConfig
-from decision_bench.websearch import fetch_url, is_public_http_url, parse_duckduckgo_html, web_search
+from decision_bench.websearch import fetch_url, is_public_http_url, parse_duckduckgo_html, rank_search_results, web_search
 
 
 def test_web_search_survives_a_source_failure():
@@ -28,6 +28,17 @@ def test_duckduckgo_html_parser_reads_result_links():
     assert results[0]["title"] == "PyYAML advisory"
     assert results[0]["url"] == "https://example.com/pyyaml"
     assert "Unsafe load" in results[0]["snippet"]
+
+
+def test_advisory_hosts_sort_ahead_of_other_pages():
+    ranked = rank_search_results(
+        [
+            {"title": "blog", "url": "https://example.com/pyyaml"},
+            {"title": "issue", "url": "https://github.com/yaml/pyyaml/issues/1"},
+            {"title": "nvd", "url": "https://nvd.nist.gov/vuln/detail/CVE-2020-14343"},
+        ]
+    )
+    assert [item["title"] for item in ranked] == ["nvd", "issue", "blog"]
 
 
 def test_web_search_reads_wikipedia_results():

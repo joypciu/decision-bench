@@ -65,12 +65,12 @@ def execute_run(
         Message(role="system", content=system_prompt(version)),
         Message(role="user", content=run.input_text),
     ]
-    tools = tool_specs(version)
     delegated = False
     last_output: dict | None = None
 
     try:
         for _ in range(version.max_steps):
+            tools = available_tools(version, repo, run)
             completion = provider.complete(
                 model=run.model,
                 messages=messages,
@@ -390,6 +390,12 @@ def run_parallel_tools(repo, providers, packs, run, version, delegate_calls, par
     return results
 
 
+def available_tools(version: BotVersion, repo: RunStore, run: Run) -> list[ToolSpec]:
+    used = {step.name for step in repo.list_steps(run.id)}
+    hidden = {name for name in ("web_search", "fetch_url") if name in used}
+    return [spec for spec in tool_specs(version) if spec.name not in hidden]
+
+
 def tool_specs(version: BotVersion) -> list[ToolSpec]:
     specs: list[ToolSpec] = []
     if "read_case" in version.allowed_tools:
@@ -565,6 +571,9 @@ def specialist_coverage_error(repo: RunStore, run: Run, output: dict | None) -> 
             for finding in child_output.get("findings") or []:
                 if isinstance(finding, dict) and finding.get("file"):
                     tokens.append(str(finding["file"]).lower())
+            named = str(child_output.get("file") or "").strip().lower()
+            if named:
+                tokens.append(named)
             notes = str(child_output.get("notes") or "").lower()
             tokens.extend(
                 token
