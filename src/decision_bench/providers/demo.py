@@ -78,31 +78,39 @@ def change_lead(case: str, payloads: list[dict]) -> dict[str, Any]:
         item.get("risk_level") == "high" and "findings" in item for item in walk(payloads)
     )
     migration_high = any(item.get("risk_level") == "high" and "notes" in item for item in walk(payloads))
+    research_hit = any(
+        item.get("sources") and "summary" in item and "findings" not in item and "notes" not in item
+        for item in walk(payloads)
+    )
+    risks = []
     if security_high:
-        return {
-            "verdict": "block",
-            "summary": excerpt,
-            "risks": [
-                {
-                    "severity": "high",
-                    "file": "auth.py" if "auth.py" in case else "unknown",
-                    "reason": "Authentication or secret handling was weakened.",
-                }
-            ],
-        }
+        risks.append(
+            {
+                "severity": "high",
+                "file": "auth.py" if "auth.py" in case else "unknown",
+                "reason": "Authentication or secret handling was weakened.",
+            }
+        )
     if migration_high:
-        return {
-            "verdict": "revise",
-            "summary": excerpt,
-            "risks": [
-                {
-                    "severity": "medium",
-                    "file": "schema",
-                    "reason": "A database migration needs a second look.",
-                }
-            ],
-        }
-    return {"verdict": "ship", "summary": excerpt, "risks": []}
+        risks.append(
+            {
+                "severity": "high" if security_high or research_hit else "medium",
+                "file": "schema",
+                "reason": "A database migration needs a second look.",
+            }
+        )
+    if research_hit:
+        risks.append(
+            {
+                "severity": "high",
+                "file": "requirements.txt" if "requirements.txt" in case else "dependency",
+                "reason": "A public advisory matches a pinned version.",
+            }
+        )
+    if not risks:
+        return {"verdict": "ship", "summary": excerpt, "risks": []}
+    verdict = "revise" if migration_high and not security_high and not research_hit else "block"
+    return {"verdict": verdict, "summary": excerpt, "risks": risks}
 
 
 def incident_lead(case: str) -> dict[str, Any]:

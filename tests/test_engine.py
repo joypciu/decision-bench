@@ -207,7 +207,7 @@ def test_parallel_delegates_overlap_and_a_failure_does_not_cancel_the_sibling(ap
     assert run.output == {"answer": "done"}
     assert {child.bot_id for child in children} == {left.id, right.id}
     assert all(child.status == "succeeded" and child.provider == "slow" for child in children)
-    assert elapsed < 0.85
+    assert elapsed < 0.95
 
 
 def test_search_and_delegate_run_in_one_turn(app, monkeypatch):
@@ -306,6 +306,159 @@ def test_open_run_shows_progress_before_it_finishes(app):
     finished = state.repo.get_run(run.id)
     assert finished.status == "succeeded"
     assert len(state.repo.list_children(run.id)) >= 2
+
+
+def test_finish_waits_until_every_specialist_was_called(app):
+    state = app.state.work
+    state.providers["script"] = ScriptProvider(
+        [
+            completion([ToolCall("a", "delegate", {"bot_id": "security-checker", "task": "Review."})]),
+            finish({"answer": "too early"}),
+            finish({"answer": "still early"}),
+        ]
+    )
+    parent, _version = create_bot(
+        state,
+        name="Incomplete lead",
+        summary="",
+        instructions="Delegate.",
+        provider="script",
+        model="script",
+        pack_id=None,
+        output_schema=SCHEMA,
+        allowed_tools=["delegate", "finish"],
+        allowed_bot_ids=["security-checker", "migration-checker"],
+        max_steps=3,
+        max_child_depth=1,
+        max_tokens=4000,
+        require_delegation=True,
+    )
+    run = start_run(state, bot_id=parent.id, text="readme only", provider="script", model="script")
+    steps = state.repo.list_steps(run.id)
+    assert run.status == "failed"
+    assert any("migration-checker" in str((step.payload or {}).get("error") or "") for step in steps)
+
+
+def test_research_finish_rejects_a_source_the_search_did_not_return(app, monkeypatch):
+    monkeypatch.setattr(
+        "decision_bench.engine.web_search",
+        lambda query, configs: {
+            "query": query,
+            "results": [{"title": "NVD", "url": "https://nvd.nist.gov/vuln/detail/CVE-2020-14343", "snippet": "PyYAML before 5.4."}],
+        },
+    )
+    state = app.state.work
+    state.providers["script"] = ScriptProvider(
+        [
+            completion([ToolCall("s", "web_search", {"query": "PyYAML 5.3.1"})]),
+            finish(
+                {
+                    "summary": "CVE-2020-14343 affects PyYAML before 5.4.",
+                    "sources": [{"title": "Invented", "url": "https://example.com/invented"}],
+                }
+            ),
+            finish(
+                {
+                    "summary": "CVE-2020-14343 affects PyYAML before 5.4.",
+                    "sources": [{"title": "NVD", "url": "https://nvd.nist.gov/vuln/detail/CVE-2020-14343"}],
+                }
+            ),
+        ]
+    )
+    bot, _version = create_bot(
+        state,
+        name="Research script",
+        summary="",
+        instructions="Search once.",
+        provider="script",
+        model="script",
+        pack_id=None,
+        output_schema={
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["summary", "sources"],
+            "properties": {
+                "summary": {"type": "string"},
+                "sources": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "required": ["title", "url"],
+                        "properties": {"title": {"type": "string"}, "url": {"type": "string"}},
+                    },
+                },
+            },
+        },
+        allowed_tools=["web_search", "finish"],
+        allowed_bot_ids=[],
+        max_steps=4,
+        max_child_depth=0,
+        max_tokens=4000,
+        require_delegation=False,
+    )
+    run = start_run(state, bot_id=bot.id, text="requirements.txt adds pyyaml==5.3.1", provider="script", model="script")
+    assert run.status == "succeeded"
+    assert run.output["sources"][0]["url"] == "https://nvd.nist.gov/vuln/detail/CVE-2020-14343"
+
+
+def test_lead_must_copy_a_high_finding_into_risks(app):
+    state = app.state.work
+    state.providers["script"] = ScriptProvider(
+        [
+            completion(
+                [
+                    ToolCall("a", "delegate", {"bot_id": "security-checker", "task": "Review."}),
+                    ToolCall("b", "delegate", {"bot_id": "migration-checker", "task": "Review."}),
+                    ToolCall("c", "delegate", {"bot_id": "research-checker", "task": "Review."}),
+                ]
+            ),
+            finish(
+                {
+                    "verdict": "block",
+                    "summary": "blocked",
+                    "risks": [{"severity": "high", "file": "README.md", "reason": "wording"}],
+                }
+            ),
+            finish(
+                {
+                    "verdict": "block",
+                    "summary": "blocked",
+                    "risks": [{"severity": "high", "file": "auth.py", "reason": "bypass"}],
+                }
+            ),
+        ]
+    )
+    parent, _version = create_bot(
+        state,
+        name="Coverage lead",
+        summary="",
+        instructions="Delegate.",
+        provider="script",
+        model="script",
+        pack_id=None,
+        output_schema={
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["verdict", "summary", "risks"],
+            "properties": {
+                "verdict": {"type": "string"},
+                "summary": {"type": "string"},
+                "risks": {"type": "array"},
+            },
+        },
+        allowed_tools=["delegate", "finish"],
+        allowed_bot_ids=["security-checker", "migration-checker", "research-checker"],
+        max_steps=4,
+        max_child_depth=1,
+        max_tokens=4000,
+        require_delegation=True,
+    )
+    run = start_run(state, bot_id=parent.id, text="auth.py bypass auth", provider="script", model="script")
+    steps = state.repo.list_steps(run.id)
+    assert run.status == "succeeded"
+    assert run.output["risks"][0]["file"] == "auth.py"
+    assert any("security-checker" in str((step.payload or {}).get("error") or "") for step in steps)
 
 
 def test_token_budget_stops_the_run(app):

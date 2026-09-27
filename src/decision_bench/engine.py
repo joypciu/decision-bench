@@ -130,7 +130,16 @@ def execute_run(
                         output = call.arguments if isinstance(call.arguments, dict) else {}
                         check = schema_check(output, version.output_schema)
                         repo.add_step(run.id, "schema", "finish", check.as_dict())
-                        if version.require_delegation and not delegated:
+                        missing = missing_bots(repo, run, version)
+                        grounded = research_output_error(output, repo.list_steps(run.id))
+                        covered = specialist_coverage_error(repo, run, output)
+                        if missing:
+                            payload = {"error": "Delegate to these bots before finish: " + ", ".join(missing)}
+                        elif grounded:
+                            payload = {"error": grounded}
+                        elif covered:
+                            payload = {"error": covered}
+                        elif version.require_delegation and not delegated:
                             payload = {"error": "Delegate to an allowed bot before finish."}
                         elif check.passed:
                             return complete_run(
@@ -161,7 +170,10 @@ def execute_run(
                 continue
 
             parsed = parse_object(completion.text)
-            if parsed is not None and not (version.require_delegation and not delegated):
+            missing = missing_bots(repo, run, version)
+            grounded = research_output_error(parsed, repo.list_steps(run.id)) if parsed else None
+            covered = specialist_coverage_error(repo, run, parsed) if parsed else None
+            if parsed is not None and not missing and not grounded and not covered and not (version.require_delegation and not delegated):
                 check = schema_check(parsed, version.output_schema)
                 repo.add_step(run.id, "schema", "text", check.as_dict())
                 if check.passed:
@@ -178,7 +190,15 @@ def execute_run(
                     )
                 last_output = parsed
             messages.append(Message(role="assistant", content=completion.text or ""))
-            messages.append(Message(role="user", content="Call the finish tool with a schema-valid object."))
+            if missing:
+                follow = "Delegate to these bots before finish: " + ", ".join(missing)
+            elif grounded:
+                follow = grounded
+            elif covered:
+                follow = covered
+            else:
+                follow = "Call the finish tool with a schema-valid object."
+            messages.append(Message(role="user", content=follow))
     except ProviderError as exc:
         return fail(str(exc), last_output)
 
@@ -275,6 +295,7 @@ def handle_delegate(
         "output": finished.output,
         "error": finished.error,
         "passed": finished.passed,
+        "brief": child_brief(bot_id, finished),
     }, True
 
 
@@ -308,6 +329,9 @@ def run_parallel_tools(repo, providers, packs, run, version, delegate_calls, par
                     "note": "Search limit reached. Do not search again. Finish from the case and earlier results.",
                 }
             return web_search(query, repo.list_provider_configs())
+        prior_fetches = sum(1 for step in repo.list_steps(run.id) if step.name == "fetch_url")
+        if prior_fetches >= 1:
+            return {"error": "Fetch limit reached. Finish from the case and the page you already fetched."}
         return fetch_url(str(arguments.get("url") or ""))
 
     singles = []
@@ -466,13 +490,123 @@ def tool_specs(version: BotVersion) -> list[ToolSpec]:
     return specs
 
 
+def missing_bots(repo: RunStore, run: Run, version: BotVersion) -> list[str]:
+    if not version.require_delegation or not version.allowed_bot_ids:
+        return []
+    seen = {child.bot_id for child in repo.list_children(run.id)}
+    for step in repo.list_steps(run.id):
+        if step.name not in {"delegate", "delegate_parallel"}:
+            continue
+        payload = step.payload or {}
+        if payload.get("bot_id"):
+            seen.add(str(payload["bot_id"]))
+        for item in payload.get("results") or []:
+            if isinstance(item, dict) and item.get("bot_id"):
+                seen.add(str(item["bot_id"]))
+    return [bot_id for bot_id in version.allowed_bot_ids if bot_id not in seen]
+
+
+def research_output_error(output: dict | None, steps: list) -> str | None:
+    if not isinstance(output, dict) or "sources" not in output or "summary" not in output:
+        return None
+    sources = output.get("sources")
+    if not isinstance(sources, list):
+        return None
+    found: list[str] = []
+    snippets: list[str] = []
+    for step in steps:
+        if step.name != "web_search":
+            continue
+        for item in (step.payload or {}).get("results") or []:
+            if not isinstance(item, dict):
+                continue
+            url = _normal_url(str(item.get("url") or ""))
+            if url:
+                found.append(url)
+            snippets.append(f"{item.get('title', '')} {item.get('snippet', '')}".lower())
+    if sources and not found:
+        return "sources must be URLs returned by web_search. Search once, or finish with an empty sources list."
+    bad = []
+    for source in sources:
+        if not isinstance(source, dict):
+            bad.append("invalid source")
+            continue
+        url = _normal_url(str(source.get("url") or ""))
+        if url not in found:
+            bad.append(url or "missing url")
+    if bad:
+        return "These source URLs were not in the search results: " + ", ".join(bad[:3])
+    blob = " ".join(snippets)
+    drifted = [
+        phrase
+        for phrase in ("auth bypass", "authentication", "drop table", "alter table", "migration", "users table")
+        if phrase in str(output.get("summary") or "").lower() and phrase not in blob
+    ]
+    if drifted:
+        return "summary must describe only the external lookup. Remove: " + ", ".join(drifted)
+    return None
+
+
+def _normal_url(url: str) -> str:
+    return url.strip().rstrip("/").lower()
+
+
+def specialist_coverage_error(repo: RunStore, run: Run, output: dict | None) -> str | None:
+    if not isinstance(output, dict) or "risks" not in output:
+        return None
+    blob = json.dumps(output.get("risks") or []).lower()
+    missing = []
+    for child in repo.list_children(run.id):
+        if child.status != "succeeded" or not isinstance(child.output, dict):
+            continue
+        child_output = child.output
+        tokens: list[str] = []
+        if child_output.get("risk_level") == "high":
+            for finding in child_output.get("findings") or []:
+                if isinstance(finding, dict) and finding.get("file"):
+                    tokens.append(str(finding["file"]).lower())
+            notes = str(child_output.get("notes") or "").lower()
+            tokens.extend(
+                token
+                for token in notes.replace("\\", "/").split()
+                if "." in token and token.strip(".,:;")[-3:] in {".py", "txt", "sql", "yml", "aml"}
+            )
+        summary = str(child_output.get("summary") or "").lower()
+        if child_output.get("sources") and "pyyaml" in summary:
+            tokens.append("pyyaml")
+        if tokens and not any(token.strip(".,:;") in blob for token in tokens):
+            missing.append(f"{child.bot_id} ({tokens[0].strip('.,:;')})")
+    if not missing:
+        return None
+    return "Add a risk for each child that reported a problem. Missing: " + ", ".join(missing)
+
+
+def child_brief(bot_id: str, finished: Run) -> str:
+    output = finished.output if isinstance(finished.output, dict) else {}
+    if finished.status != "succeeded":
+        return f"{bot_id} failed: {finished.error or 'no output'}"
+    if "findings" in output:
+        files = [str(item.get("file")) for item in output.get("findings") or [] if isinstance(item, dict)]
+        return f"{bot_id} risk_level={output.get('risk_level')} files={files or ['none']}"
+    if "notes" in output and "risk_level" in output:
+        return f"{bot_id} risk_level={output.get('risk_level')} notes={str(output.get('notes'))[:180]}"
+    if "sources" in output:
+        titles = [str(item.get("title")) for item in output.get("sources") or [] if isinstance(item, dict)]
+        return f"{bot_id} sources={titles[:3] or ['none']} summary={str(output.get('summary'))[:220]}"
+    if "severity" in output and "gaps" not in output:
+        return f"{bot_id} severity={output.get('severity')}"
+    if "gaps" in output:
+        return f"{bot_id} gaps={output.get('gaps')}"
+    return f"{bot_id} status=succeeded"
+
+
 def system_prompt(version: BotVersion) -> str:
     schema = json.dumps(version.output_schema, indent=2)
     children = ", ".join(version.allowed_bot_ids) or "none"
     rule = (
-        "You must call delegate or delegate_parallel for the specialist bots before finish. "
+        "Call delegate once for every bot in the allowlist before finish. "
         "Delegate calls in the same turn run at the same time. "
-        "Use web_search or fetch_url when the case is missing a public fact."
+        "Decide only from each child's brief and output. Do not invent a file a child did not name."
         if version.require_delegation
         else "Do not delegate. Call finish when the decision is ready."
     )

@@ -132,7 +132,7 @@ def seed_templates(repo: RunStore, packs: dict[str, TaskPack]) -> None:
         tools=["read_case", "web_search", "fetch_url", "finish"],
         children=[],
         require_delegation=False,
-        max_steps=4,
+        max_steps=5,
         max_child_depth=0,
         pack_id=None,
     )
@@ -144,9 +144,9 @@ def seed_templates(repo: RunStore, packs: dict[str, TaskPack]) -> None:
         instructions=(
             "You lead a change-risk review. In one turn, delegate to security-checker, migration-checker, and research-checker. "
             "Do not search the web yourself. "
-            "Return verdict block when security risk_level is high, when migration risk_level is high, or when research confirms a vulnerable version. "
+            "Return verdict block when security risk_level is high, when migration risk_level is high, or when research sources is not empty. "
             "Otherwise ship. If a child fails, name it and decide from the children that succeeded. "
-            "Put each problem in risks with its file."
+            "Copy each problem into risks using the file that child named. Do not add a file no child named."
         ),
         schema=packs["change_risk"].output_schema,
         tools=["read_case", "delegate", "delegate_parallel", "finish"],
@@ -235,7 +235,8 @@ def ensure(
         if (
             current.allowed_tools == next_tools
             and current.allowed_bot_ids == next_children
-            and current.instructions.strip() == instructions.strip()
+            and             current.instructions.strip() == instructions.strip()
+            and current.max_steps >= max_steps
         ):
             return
         repo.add_version(
