@@ -30,6 +30,16 @@ def test_duckduckgo_html_parser_reads_result_links():
     assert "Unsafe load" in results[0]["snippet"]
 
 
+def test_fetch_url_rejects_a_script_payload():
+    result = fetch_url("https://example.com/app.js", get=lambda url: '{"imports": {"react": "x.js"}}')
+    assert "article" in result["error"]
+    page = fetch_url(
+        "https://example.com/wiki",
+        get=lambda url: '<html><body><script>{"imports":{"react":"x.js"}}</script></body></html>',
+    )
+    assert "article" in page["error"]
+
+
 def test_advisory_hosts_sort_ahead_of_other_pages():
     ranked = rank_search_results(
         [

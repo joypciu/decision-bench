@@ -75,10 +75,9 @@ def fetch_url(url: str, get: Get | None = None) -> dict:
         body = fetch(url)
     except Exception as exc:
         return {"error": f"Fetch failed: {exc}"[:240], "url": url}
-    if isinstance(body, dict):
-        text = str(body)[:4000]
-    else:
-        text = plain_text(str(body))[:4000]
+    text = "" if isinstance(body, dict) else plain_text(str(body))[:4000]
+    if text.lstrip()[:1] in "{[" or len(re.findall(r"[A-Za-z]{4,}", text)) < 12:
+        return {"error": "That page did not return an article. Finish from the search snippets.", "url": url}
     return {"url": url, "text": text}
 
 

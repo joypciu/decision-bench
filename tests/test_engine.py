@@ -521,10 +521,83 @@ def test_used_search_is_not_offered_again(app, monkeypatch):
     assert "fetch_url" in seen[1]
 
 
+def test_a_closed_tool_call_does_not_consume_the_step_budget(app, monkeypatch):
+    monkeypatch.setattr(
+        "decision_bench.engine.web_search",
+        lambda query, configs: {
+            "query": query,
+            "results": [{"title": "NVD", "url": "https://nvd.nist.gov/vuln/detail/CVE-2020-14343", "snippet": "PyYAML"}],
+        },
+    )
+    state = app.state.work
+    state.providers["script"] = ScriptProvider(
+        [
+            completion([ToolCall("s", "web_search", {"query": "PyYAML"})]),
+            completion([ToolCall("again", "web_search", {"query": "PyYAML again"})]),
+            finish(
+                {
+                    "summary": "CVE-2020-14343 affects PyYAML before 5.4.",
+                    "sources": [{"title": "NVD", "url": "https://nvd.nist.gov/vuln/detail/CVE-2020-14343"}],
+                }
+            ),
+        ]
+    )
+    bot, _version = create_bot(
+        state,
+        name="Closed search",
+        summary="",
+        instructions="Search once.",
+        provider="script",
+        model="script",
+        pack_id=None,
+        output_schema={
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["summary", "sources"],
+            "properties": {"summary": {"type": "string"}, "sources": {"type": "array"}},
+        },
+        allowed_tools=["web_search", "finish"],
+        allowed_bot_ids=[],
+        max_steps=2,
+        max_child_depth=0,
+        max_tokens=4000,
+        require_delegation=False,
+    )
+    run = start_run(state, bot_id=bot.id, text="pyyaml==5.3.1", provider="script", model="script")
+    assert run.status == "succeeded"
+    assert run.output["sources"][0]["url"].startswith("https://nvd.nist.gov/")
+
+
+def test_a_valid_finish_is_kept_when_that_call_crosses_the_token_budget(app):
+    state = app.state.work
+    state.providers["script"] = ScriptProvider(
+        [finish({"answer": "kept"}, prompt_tokens=80, completion_tokens=80)]
+    )
+    bot, _version = create_bot(
+        state,
+        name="Finish over budget",
+        summary="",
+        instructions="Finish.",
+        provider="script",
+        model="script",
+        pack_id=None,
+        output_schema=SCHEMA,
+        allowed_tools=["finish"],
+        allowed_bot_ids=[],
+        max_steps=2,
+        max_child_depth=0,
+        max_tokens=100,
+        require_delegation=False,
+    )
+    run = start_run(state, bot_id=bot.id, text="case", provider="script", model="script")
+    assert run.status == "succeeded"
+    assert run.output == {"answer": "kept"}
+
+
 def test_token_budget_stops_the_run(app):
     state = app.state.work
     state.providers["script"] = ScriptProvider(
-        [finish({"answer": "too big"}, prompt_tokens=80, completion_tokens=80)]
+        [Completion(text="too big", tool_calls=[], prompt_tokens=80, completion_tokens=80, latency_ms=1)]
     )
     bot, _version = create_bot(
         state,

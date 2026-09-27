@@ -67,10 +67,14 @@ def execute_run(
     ]
     delegated = False
     last_output: dict | None = None
+    steps_used = 0
+    corrections = 0
 
     try:
-        for _ in range(version.max_steps):
+        while steps_used < version.max_steps:
+            steps_used += 1
             tools = available_tools(version, repo, run)
+            offered = {spec.name for spec in tools}
             completion = provider.complete(
                 model=run.model,
                 messages=messages,
@@ -92,8 +96,25 @@ def execute_run(
                     "latency_ms": completion.latency_ms,
                 },
             )
-            if prompt_tokens + completion_tokens > version.max_tokens:
+            over_budget = prompt_tokens + completion_tokens > version.max_tokens
+            has_finish = any(call.name == "finish" for call in completion.tool_calls)
+            if over_budget and not has_finish:
                 return fail("Token budget exhausted.", last_output)
+
+            if completion.tool_calls and all(call.name not in offered for call in completion.tool_calls):
+                messages.append(
+                    Message(role="assistant", content=completion.text or "", tool_calls=completion.tool_calls)
+                )
+                for call in completion.tool_calls:
+                    payload = {"error": f"{call.name} is closed. Call finish now."}
+                    repo.add_step(run.id, "tool_result", call.name, payload)
+                    messages.append(
+                        Message(role="tool", content=json.dumps(payload), tool_call_id=call.id, name=call.name)
+                    )
+                if corrections < 2:
+                    corrections += 1
+                    steps_used -= 1
+                continue
 
             if completion.tool_calls:
                 messages.append(
@@ -156,6 +177,9 @@ def execute_run(
                         else:
                             last_output = output
                             payload = {"error": check.detail}
+                            if over_budget:
+                                repo.add_step(run.id, "tool_result", call.name, payload)
+                                return fail("Token budget exhausted.", last_output)
                     else:
                         payload = {"error": f"Unknown tool {call.name}."}
                     repo.add_step(run.id, "tool_result", call.name, payload)
@@ -392,7 +416,7 @@ def run_parallel_tools(repo, providers, packs, run, version, delegate_calls, par
 
 def available_tools(version: BotVersion, repo: RunStore, run: Run) -> list[ToolSpec]:
     used = {step.name for step in repo.list_steps(run.id)}
-    hidden = {name for name in ("web_search", "fetch_url") if name in used}
+    hidden = {name for name in ("web_search", "fetch_url", "read_case") if name in used}
     return [spec for spec in tool_specs(version) if spec.name not in hidden]
 
 
