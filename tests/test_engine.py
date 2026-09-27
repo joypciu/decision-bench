@@ -534,6 +534,95 @@ def test_a_lead_finishes_from_checkers_when_its_model_becomes_unavailable(app):
     assert any("customer communication" in gap.lower() for gap in run.output["gaps"])
 
 
+def test_a_failed_checker_does_not_require_another_lead_model_call(app):
+    class BoomProvider:
+        name = "boom"
+        configured = True
+        detail = "fails"
+        default_model = "boom"
+
+        def complete(self, *, model, messages, tools, schema):
+            del model, messages, tools, schema
+            raise ProviderError("HTTP 429: quota")
+
+    state = app.state.work
+    state.providers["boom"] = BoomProvider()
+    broken, _broken_version = create_bot(
+        state,
+        name="Broken checker",
+        summary="",
+        instructions="Fail.",
+        provider="boom",
+        model="boom",
+        pack_id=None,
+        output_schema=SCHEMA,
+        allowed_tools=["finish"],
+        allowed_bot_ids=[],
+        max_steps=2,
+        max_child_depth=0,
+        max_tokens=4000,
+        require_delegation=False,
+    )
+    calls = []
+    provider = ScriptProvider(
+        [
+            completion(
+                [
+                    ToolCall("a", "delegate", {"bot_id": "severity-checker", "task": "Assign severity."}),
+                    ToolCall("b", "delegate", {"bot_id": broken.id, "task": "List gaps."}),
+                ]
+            )
+        ]
+    )
+    original = provider.complete
+
+    def complete(*, model, messages, tools, schema):
+        calls.append(1)
+        if not provider.items:
+            raise ProviderError("lead should not be called again")
+        return original(model=model, messages=messages, tools=tools, schema=schema)
+
+    provider.complete = complete
+    state.providers["script"] = provider
+    parent, _version = create_bot(
+        state,
+        name="Partial lead",
+        summary="",
+        instructions="Delegate.",
+        provider="script",
+        model="script",
+        pack_id=None,
+        output_schema={
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["severity", "summary", "gaps", "next_checks"],
+            "properties": {
+                "severity": {"type": "string", "enum": ["sev1", "sev2", "sev3"]},
+                "summary": {"type": "string"},
+                "gaps": {"type": "array", "items": {"type": "string"}},
+                "next_checks": {"type": "array", "items": {"type": "string"}},
+            },
+        },
+        allowed_tools=["delegate", "finish"],
+        allowed_bot_ids=["severity-checker", broken.id],
+        max_steps=3,
+        max_child_depth=1,
+        max_tokens=4000,
+        require_delegation=True,
+    )
+    run = start_run(
+        state,
+        bot_id=parent.id,
+        text="Production API outage. All users are affected and there is data loss.",
+        provider="script",
+        model="script",
+    )
+    assert calls == [1]
+    assert run.status == "succeeded"
+    assert run.output["severity"] == "sev1"
+    assert "429" in " ".join(run.output["gaps"])
+
+
 def test_research_finish_rejects_a_source_the_search_did_not_return(app, monkeypatch):
     monkeypatch.setattr(
         "decision_bench.engine.web_search",

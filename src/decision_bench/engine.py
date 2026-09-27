@@ -195,6 +195,11 @@ def execute_run(
                             name=call.name,
                         )
                     )
+                saved = finish_if_a_checker_failed(
+                    repo, packs, run, version, prompt_tokens, completion_tokens, elapsed()
+                )
+                if saved is not None:
+                    return saved
                 continue
 
             parsed = parse_object(completion.text)
@@ -244,11 +249,29 @@ def execute_run(
     return fail("Step budget exhausted.", last_output)
 
 
+def finish_if_a_checker_failed(repo, packs, run, version, prompt_tokens, completion_tokens, latency_ms):
+    children = repo.list_children(run.id)
+    if not children or not any(child.status != "succeeded" for child in children):
+        return None
+    if missing_bots(repo, run, version):
+        return None
+    return finish_from_children(
+        repo,
+        packs,
+        run,
+        version,
+        prompt_tokens,
+        completion_tokens,
+        latency_ms,
+        "Decided from the checkers that finished.",
+    )
+
+
 def finish_from_children(repo, packs, run, version, prompt_tokens, completion_tokens, latency_ms, reason: str):
     children = repo.list_children(run.id)
     if not children:
         return None
-    fallback = decision_from_children(version, children, reason)
+    fallback = decision_from_children(version, children, reason, run.input_text)
     if fallback is None or not schema_check(fallback, version.output_schema).passed:
         return None
     return complete_run(
@@ -264,11 +287,12 @@ def finish_from_children(repo, packs, run, version, prompt_tokens, completion_to
     )
 
 
-def decision_from_children(version: BotVersion, children: list, reason: str) -> dict | None:
+def decision_from_children(version: BotVersion, children: list, reason: str, case: str = "") -> dict | None:
     succeeded = [child for child in children if child.status == "succeeded" and isinstance(child.output, dict)]
     failed = [child for child in children if child.status != "succeeded"]
     props = set((version.output_schema.get("properties") or {}).keys())
-    note = "Lead model unavailable (" + reason.strip()[:180] + ")."
+    excerpt = " ".join(case.split())[:240]
+    note = (excerpt + " Lead model unavailable (" + reason.strip()[:180] + ").").strip()
     if "severity" in props and "gaps" in props:
         return _incident_from_children(succeeded, failed, note)
     if "verdict" in props and "risks" in props:
