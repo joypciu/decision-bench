@@ -155,12 +155,15 @@ def execute_run(
                         missing = missing_bots(repo, run, version)
                         grounded = research_output_error(output, repo.list_steps(run.id))
                         covered = specialist_coverage_error(repo, run, output)
+                        triage = triage_coverage_error(repo, run, output)
                         if missing:
                             payload = {"error": "Delegate to these bots before finish: " + ", ".join(missing)}
                         elif grounded:
                             payload = {"error": grounded}
                         elif covered:
                             payload = {"error": covered}
+                        elif triage:
+                            payload = {"error": triage}
                         elif version.require_delegation and not delegated:
                             payload = {"error": "Delegate to an allowed bot before finish."}
                         elif check.passed:
@@ -198,7 +201,8 @@ def execute_run(
             missing = missing_bots(repo, run, version)
             grounded = research_output_error(parsed, repo.list_steps(run.id)) if parsed else None
             covered = specialist_coverage_error(repo, run, parsed) if parsed else None
-            if parsed is not None and not missing and not grounded and not covered and not (version.require_delegation and not delegated):
+            triage = triage_coverage_error(repo, run, parsed) if parsed else None
+            if parsed is not None and not missing and not grounded and not covered and not triage and not (version.require_delegation and not delegated):
                 check = schema_check(parsed, version.output_schema)
                 repo.add_step(run.id, "schema", "text", check.as_dict())
                 if check.passed:
@@ -221,6 +225,8 @@ def execute_run(
                 follow = grounded
             elif covered:
                 follow = covered
+            elif triage:
+                follow = triage
             else:
                 follow = "Call the finish tool with a schema-valid object."
             messages.append(Message(role="user", content=follow))
@@ -620,6 +626,10 @@ def research_output_error(output: dict | None, steps: list) -> str | None:
             bad.append(url or "missing url")
     if bad:
         return "These source URLs were not in the search results: " + ", ".join(bad[:3])
+    official = [url for url in found if _official_advisory(url)]
+    cited = [_normal_url(str(source.get("url") or "")) for source in sources if isinstance(source, dict)]
+    if official and not any(url in official for url in cited):
+        return "sources must include an official advisory from the search results: " + official[0]
     blob = " ".join(snippets)
     drifted = [
         phrase
@@ -644,6 +654,28 @@ def research_output_error(output: dict | None, steps: list) -> str | None:
 
 def _normal_url(url: str) -> str:
     return url.strip().rstrip("/").lower()
+
+
+def _official_advisory(url: str) -> bool:
+    return any(part in url for part in ("nvd.nist.gov", "cve.org", "osv.dev", "github.com/advisories"))
+
+
+def triage_coverage_error(repo: RunStore, run: Run, output: dict | None) -> str | None:
+    if not isinstance(output, dict) or "severity" not in output or "gaps" not in output:
+        return None
+    for child in repo.list_children(run.id):
+        if child.status != "succeeded" or not isinstance(child.output, dict):
+            continue
+        child_output = child.output
+        child_severity = child_output.get("severity")
+        if child_severity and "gaps" not in child_output and child_severity != output.get("severity"):
+            return f"severity must match the severity checker ({child_severity})."
+        if "gaps" in child_output and "severity" not in child_output:
+            lead_gaps = " ".join(str(item) for item in output.get("gaps") or []).lower()
+            child_gaps = [str(gap) for gap in child_output.get("gaps") or [] if str(gap).strip()]
+            if child_gaps and not any(gap.lower() in lead_gaps for gap in child_gaps):
+                return "gaps must include a gap named by the missing-facts checker: " + child_gaps[0]
+    return None
 
 
 def specialist_coverage_error(repo: RunStore, run: Run, output: dict | None) -> str | None:

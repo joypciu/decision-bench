@@ -373,6 +373,106 @@ def test_research_summary_cannot_decide_the_pull_request():
     ) is None
 
 
+def test_research_must_cite_an_official_advisory_when_search_returned_one():
+    from decision_bench.engine import research_output_error
+
+    class Step:
+        name = "web_search"
+        payload = {
+            "results": [
+                {
+                    "title": "CVE-2020-14343",
+                    "url": "https://nvd.nist.gov/vuln/detail/CVE-2020-14343",
+                    "snippet": "yaml.load before 5.4.",
+                },
+                {"title": "PyPI", "url": "https://pypi.org/project/PyYAML/", "snippet": "Package page."},
+            ]
+        }
+
+    rejected = research_output_error(
+        {
+            "summary": "PyYAML 5.3.1 is affected by CVE-2020-14343.",
+            "sources": [{"title": "PyPI", "url": "https://pypi.org/project/PyYAML/"}],
+        },
+        [Step()],
+    )
+    assert rejected is not None
+    assert "nvd.nist.gov" in rejected
+    assert research_output_error(
+        {
+            "summary": "PyYAML 5.3.1 is affected by CVE-2020-14343. The fix landed in 5.4.",
+            "sources": [{"title": "CVE-2020-14343", "url": "https://nvd.nist.gov/vuln/detail/CVE-2020-14343"}],
+        },
+        [Step()],
+    ) is None
+
+
+def test_incident_lead_must_keep_the_severity_checker_result(app):
+    state = app.state.work
+    state.providers["script"] = ScriptProvider(
+        [
+            completion(
+                [
+                    ToolCall("a", "delegate", {"bot_id": "severity-checker", "task": "Assign severity."}),
+                    ToolCall("b", "delegate", {"bot_id": "gaps-checker", "task": "List gaps."}),
+                    ToolCall("c", "delegate", {"bot_id": "research-checker", "task": "Look up public facts."}),
+                ]
+            ),
+            finish(
+                {
+                    "severity": "sev3",
+                    "summary": "Narrow issue.",
+                    "gaps": ["Something else."],
+                    "next_checks": ["Look later."],
+                }
+            ),
+            finish(
+                {
+                    "severity": "sev1",
+                    "summary": "Production API outage. All users are affected.",
+                    "gaps": ["Start time and customer communication are not both confirmed."],
+                    "next_checks": ["Confirm the blast radius.", "Compare with the last healthy deploy."],
+                }
+            ),
+        ]
+    )
+    parent, _version = create_bot(
+        state,
+        name="Triage script",
+        summary="",
+        instructions="Delegate.",
+        provider="script",
+        model="script",
+        pack_id=None,
+        output_schema={
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["severity", "summary", "gaps", "next_checks"],
+            "properties": {
+                "severity": {"type": "string"},
+                "summary": {"type": "string"},
+                "gaps": {"type": "array"},
+                "next_checks": {"type": "array"},
+            },
+        },
+        allowed_tools=["delegate", "finish"],
+        allowed_bot_ids=["severity-checker", "gaps-checker", "research-checker"],
+        max_steps=4,
+        max_child_depth=1,
+        max_tokens=4000,
+        require_delegation=True,
+    )
+    run = start_run(
+        state,
+        bot_id=parent.id,
+        text="Production API outage. All users are affected and there is data loss.",
+        provider="script",
+        model="script",
+    )
+    assert run.status == "succeeded"
+    assert run.output["severity"] == "sev1"
+
+
 def test_research_finish_rejects_a_source_the_search_did_not_return(app, monkeypatch):
     monkeypatch.setattr(
         "decision_bench.engine.web_search",

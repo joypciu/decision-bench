@@ -55,7 +55,7 @@ def infer_output(schema: dict, messages: list[Message]) -> dict[str, Any]:
     if "verdict" in props:
         return change_lead(case, payloads)
     if "gaps" in props and "severity" in props and "summary" in props:
-        return incident_lead(case)
+        return incident_lead(case, payloads)
     if "sources" in props and "summary" in props:
         return {"summary": "No external lookup was required for this case.", "sources": []}
     if "findings" in props:
@@ -113,12 +113,22 @@ def change_lead(case: str, payloads: list[dict]) -> dict[str, Any]:
     return {"verdict": verdict, "summary": excerpt, "risks": risks}
 
 
-def incident_lead(case: str) -> dict[str, Any]:
+def incident_lead(case: str, payloads: list[dict]) -> dict[str, Any]:
+    severity = classify_severity(case)
+    gaps = ["Customer communication status is not stated."]
+    checks = ["Confirm who is affected.", "Check the latest deploy."]
+    for item in walk(payloads):
+        if item.get("severity") and "gaps" not in item:
+            severity = str(item["severity"])
+        if isinstance(item.get("gaps"), list) and "severity" not in item and item.get("gaps"):
+            gaps = [str(gap) for gap in item["gaps"]]
+            if item.get("next_checks"):
+                checks = [str(check) for check in item["next_checks"]]
     return {
-        "severity": classify_severity(case),
+        "severity": severity,
         "summary": " ".join(case.split())[:360],
-        "gaps": ["Customer communication status is not stated."],
-        "next_checks": ["Confirm who is affected.", "Check the latest deploy."],
+        "gaps": gaps,
+        "next_checks": checks,
     }
 
 

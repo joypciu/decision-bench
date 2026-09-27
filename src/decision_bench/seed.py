@@ -198,9 +198,10 @@ def seed_templates(repo: RunStore, packs: dict[str, TaskPack]) -> None:
         name="Incident lead",
         summary="Spawns the checkers, then returns a triage decision.",
         instructions=(
-            "You lead incident triage. Delegate to severity-checker and gaps-checker before you finish. "
-            "Use sev1 for a broad outage, all users, or data loss, sev2 for a degraded shared service, "
-            "and sev3 for a narrow impact. Return severity, summary, gaps, and next_checks."
+            "You lead incident triage. In one turn, delegate to severity-checker, gaps-checker, and research-checker. "
+            "Use the severity checker's severity. Copy its rationale into summary only as support. "
+            "Copy the missing-facts checker's gaps and next_checks. "
+            "sev1 is a broad outage, all users, or data loss. sev2 is a degraded shared service. sev3 is a narrow impact."
         ),
         schema=packs["incident_triage"].output_schema,
         tools=["read_case", "delegate", "delegate_parallel", "finish"],
