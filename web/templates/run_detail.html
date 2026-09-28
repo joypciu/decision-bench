@@ -2,19 +2,21 @@
 {% block title %}Run · Decision Bench{% endblock %}
 {% block content %}
 <div id="live-run" data-run-id="{{ node.run.id }}" data-status="{{ node.run.status }}" hidden></div>
+{% set verdict = node.run.output | decision %}
 {% if node.run.status == 'running' %}
 <section class="panel live-stage" id="live-panel">
   <div class="panel-head">
     <h2><span class="pulse"></span> Working</h2>
     <span class="pill" id="live-status">running</span>
   </div>
-  <p class="lede" id="live-note">The bot is running. Sub-bots show up here as they start.</p>
+  <p class="lede" id="live-note">The bot is running. Specialists appear here as they start.</p>
   <ul class="live-log" id="live-log"></ul>
 </section>
 {% endif %}
+<header class="page-head run-head">
   <div>
-    <p class="eyebrow">{{ node.bot_name }} · {{ node.run.provider }}</p>
-    <h1 class="decision">{{ node.run.output | decision or node.run.status }}</h1>
+    <p class="eyebrow"><a href="/">Runs</a> · {{ node.bot_name }} · {{ node.run.provider }}</p>
+    <h1 class="decision {{ verdict or '' }}">{{ verdict or ('Working' if node.run.status == 'running' else node.run.status) }}</h1>
     <p class="lede">{{ node.run.latency_ms }} ms · {{ node.run.prompt_tokens + node.run.completion_tokens }} tokens · score {{ node.run.score }}</p>
   </div>
   <span class="pill {{ node.run.status }}">{{ node.run.status }}</span>
@@ -22,10 +24,46 @@
 {% if node.run.output | summary %}<p class="summary">{{ node.run.output | summary }}</p>{% endif %}
 {% if node.run.error %}<p class="banner">{{ node.run.error }}</p>{% endif %}
 {% if node.run.error | provider_hint %}<p class="hint">{{ node.run.error | provider_hint }}</p>{% endif %}
+{% if node.run.output and node.run.output.risks %}
+<ul class="risk-list">
+  {% for risk in node.run.output.risks %}
+  <li>
+    <span class="pill {{ risk.severity }}">{{ risk.severity }}</span>
+    <strong>{{ risk.file }}</strong>
+    <span>{{ risk.reason }}</span>
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% if node.run.output and node.run.output.findings %}
+<ul class="risk-list">
+  {% for finding in node.run.output.findings %}
+  <li>
+    <strong>{{ finding.file }}</strong>
+    <span>{{ finding.reason }}</span>
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% if error %}<p class="banner">{{ error }}</p>{% endif %}
+{% if node.run.status != 'running' %}
+<form class="panel form follow-up" method="post" action="/runs/{{ node.run.id }}/follow-up">
+  <h2>Ask a follow-up</h2>
+  <p class="lede">This bot runs again and sees the result above.</p>
+  <label>
+    <span>Question</span>
+    <textarea name="task" rows="3" required placeholder="Look again at one file and say what changed."></textarea>
+  </label>
+  <button class="button" type="submit">Ask</button>
+</form>
+{% endif %}
 {% if node.children %}
 <ul class="child-row">
   {% for child in node.children %}
-  <li><span class="pill {{ child.run.status }}">{{ child.bot_name }}</span> <span>{{ child.run.provider }}</span> {{ child.run.output | decision or child.run.status }}</li>
+  <li><a class="child-chip" href="/runs/{{ child.run.id }}">
+    <span class="pill {{ child.run.status }}">{{ child.bot_name }}</span>
+    <span>{{ child.run.output | decision or child.run.status }}</span>
+  </a></li>
   {% endfor %}
 </ul>
 {% endif %}
@@ -40,7 +78,10 @@
         <span>{{ item.run.score }}</span>
       </header>
       {% if item.run.output %}
-      <pre>{{ item.run.output | pretty }}</pre>
+      <details>
+        <summary>Raw output</summary>
+        <pre>{{ item.run.output | pretty }}</pre>
+      </details>
       {% endif %}
       {% if item.children %}
       <div class="children">
@@ -64,15 +105,17 @@
       </ul>
     </article>
     <article class="panel">
-      <h2>Steps</h2>
-      <ol class="steps">
-        {% for step in node.steps %}
-        <li>
-          <span class="label">{{ step.kind }}{% if step.name %} · {{ step.name }}{% endif %}</span>
-          <pre>{{ step.payload | pretty }}</pre>
-        </li>
-        {% endfor %}
-      </ol>
+      <details>
+        <summary>Steps ({{ node.steps|length }})</summary>
+        <ol class="steps">
+          {% for step in node.steps %}
+          <li>
+            <span class="label">{{ step.kind }}{% if step.name %} · {{ step.name }}{% endif %}</span>
+            <pre>{{ step.payload | pretty }}</pre>
+          </li>
+          {% endfor %}
+        </ol>
+      </details>
     </article>
     <article class="panel">
       <h2>Input</h2>

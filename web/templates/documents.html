@@ -14,12 +14,13 @@
     <span>File</span>
     <input type="file" name="file" required>
   </label>
-  <div class="split five">
+  <div class="split four">
     <label><span>Crop left</span><input name="crop_left" inputmode="numeric" placeholder="optional"></label>
     <label><span>Crop top</span><input name="crop_top" inputmode="numeric" placeholder="optional"></label>
     <label><span>Crop right</span><input name="crop_right" inputmode="numeric" placeholder="optional"></label>
-    <label><span>PDF page</span><input name="page" inputmode="numeric" placeholder="1"></label>
+    <label><span>Crop bottom</span><input name="crop_bottom" inputmode="numeric" placeholder="optional"></label>
   </div>
+  <label class="page-field"><span>PDF page</span><input name="page" inputmode="numeric" placeholder="1"></label>
   <button class="button" type="submit">Extract text</button>
 </form>
 {% if result %}

@@ -418,6 +418,28 @@ def complete_run(
     return reloaded
 
 
+def previous_output(repo: RunStore, parent_run_id: str, bot_id: str) -> dict | None:
+    matches = [child for child in repo.list_children(parent_run_id) if child.bot_id == bot_id and child.output]
+    if not matches:
+        return None
+    output = matches[-1].output
+    return output if isinstance(output, dict) else None
+
+
+def case_text(input_text: str) -> str:
+    marker = "\n\nCASE:\n"
+    if input_text.startswith("FOLLOW-UP:") and marker in input_text:
+        return input_text.split(marker, 1)[1]
+    return input_text
+
+
+def child_input(task: str, case: str, previous: dict | None) -> str:
+    source = case_text(case)
+    if previous is None:
+        return f"{task}\n\nCASE:\n{source}"
+    return f"FOLLOW-UP:\n{task}\n\nYOUR PREVIOUS RESULT:\n{json.dumps(previous)}\n\nCASE:\n{source}"
+
+
 def handle_delegate(
     repo: RunStore,
     providers: dict[str, ModelProvider],
@@ -451,7 +473,7 @@ def handle_delegate(
     child = new_run(
         repo,
         version=child_version,
-        input_text=f"{task}\n\nCASE:\n{run.input_text}",
+        input_text=child_input(task, run.input_text, previous_output(repo, run.id, bot_id)),
         provider=child_provider,
         model=child_model,
         pack_id=run.pack_id,
@@ -642,7 +664,7 @@ def tool_specs(version: BotVersion) -> list[ToolSpec]:
         specs.append(
             ToolSpec(
                 name="delegate",
-                description="Spawn one allowed bot and wait for its structured result. Several delegate calls in one turn run at the same time.",
+                description="Spawn one allowed bot and wait for its structured result. Several delegate calls in one turn run at the same time. A later call to the same bot is a follow-up: the child sees its previous result.",
                 parameters={
                     "type": "object",
                     "additionalProperties": False,

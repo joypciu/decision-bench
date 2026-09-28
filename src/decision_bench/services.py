@@ -148,6 +148,38 @@ def save_version(state: AppState, bot_id: str, **kwargs) -> BotVersion:
     )
 
 
+def open_follow_up(state: AppState, run_id: str, task: str) -> Run:
+    current = state.repo.get_run(run_id)
+    if current is None:
+        raise ValueError("Run not found.")
+    if current.status == "running":
+        raise ValueError("Wait until this run finishes before asking a follow-up.")
+    question = task.strip()
+    if not question:
+        raise ValueError("A follow-up question is required.")
+    version = state.repo.latest_version(current.bot_id)
+    if version is None:
+        raise ValueError("Bot not found.")
+    from decision_bench.engine import child_input
+
+    text = child_input(question, current.input_text, current.output if isinstance(current.output, dict) else None)
+    if len(text) > 50_000:
+        raise ValueError("That follow-up is too long.")
+    parent_id = current.parent_run_id
+    return new_run(
+        state.repo,
+        version=version,
+        input_text=text,
+        provider=current.provider,
+        model=current.model,
+        pack_id=None,
+        case_id=None,
+        parent_run_id=parent_id,
+        root_run_id=current.root_run_id if parent_id else None,
+        depth=current.depth if parent_id else 0,
+    )
+
+
 def open_run(
     state: AppState,
     *,

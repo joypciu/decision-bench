@@ -15,6 +15,7 @@ from decision_bench.provider_admin import public_provider, remove_provider, save
 from decision_bench.services import (
     AppState,
     create_bot,
+    open_follow_up,
     open_run,
     parse_schema,
     perform_run,
@@ -191,6 +192,17 @@ def register_routes(app: FastAPI) -> None:
         background.add_task(perform_run, state, run.id)
         return RedirectResponse(f"/runs/{run.id}", status_code=303)
 
+    @app.post("/runs/{run_id}/follow-up")
+    async def follow_up_page(request: Request, run_id: str, background: BackgroundTasks):
+        state = work(request.app)
+        form = await request.form()
+        try:
+            run = open_follow_up(state, run_id, str(form.get("task") or ""))
+        except ValueError as exc:
+            return RedirectResponse(f"/runs/{run_id}?error={quote(str(exc))}", status_code=303)
+        background.add_task(perform_run, state, run.id)
+        return RedirectResponse(f"/runs/{run.id}", status_code=303)
+
     @app.get("/documents")
     def documents_page(request: Request):
         return render(request, "documents.html", active="documents", error=None, result=None)
@@ -214,7 +226,7 @@ def register_routes(app: FastAPI) -> None:
         node = run_tree(state, run_id)
         if node is None:
             return RedirectResponse("/", status_code=303)
-        return render(request, "run_detail.html", active="home", node=node)
+        return render(request, "run_detail.html", active="home", node=node, error=request.query_params.get("error"))
 
     @app.get("/evals")
     def evals_page(request: Request):

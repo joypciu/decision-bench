@@ -25,6 +25,15 @@ document.querySelectorAll("[data-theme-value]").forEach((button) => {
   button.addEventListener("click", () => applyTheme(button.dataset.themeValue));
 });
 
+document.querySelectorAll('form[action="/runs"], form[action$="/follow-up"]').forEach((form) => {
+  form.addEventListener("submit", () => {
+    const button = form.querySelector("button[type=submit]");
+    if (!button) return;
+    button.disabled = true;
+    button.textContent = "Starting…";
+  });
+});
+
 const live = document.getElementById("live-run");
 if (live && live.dataset.status === "running") {
   const log = document.getElementById("live-log");
@@ -40,6 +49,8 @@ if (live && live.dataset.status === "running") {
       return;
     }
     status.textContent = tree.run.status;
+    const note = document.getElementById("live-note");
+    if (note && tree.summary) note.textContent = tree.summary;
     log.replaceChildren();
     const walk = (node, depth) => {
       const item = document.createElement("li");

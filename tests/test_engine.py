@@ -991,6 +991,57 @@ def test_fetch_is_skipped_when_search_already_returned_an_advisory(app, monkeypa
     assert any("official advisory" in str((step.payload or {}).get("note") or "") for step in steps)
 
 
+def test_a_second_delegate_includes_the_previous_result(app):
+    state = app.state.work
+    state.providers["script"] = ScriptProvider(
+        [
+            completion([ToolCall("a", "delegate", {"bot_id": "security-checker", "task": "Review."})]),
+            completion([ToolCall("b", "delegate", {"bot_id": "security-checker", "task": "Name the file again."})]),
+            finish({"answer": "done"}),
+        ]
+    )
+    parent, _version = create_bot(
+        state,
+        name="Follow-up lead",
+        summary="",
+        instructions="Delegate twice.",
+        provider="script",
+        model="script",
+        pack_id=None,
+        output_schema=SCHEMA,
+        allowed_tools=["delegate", "finish"],
+        allowed_bot_ids=["security-checker"],
+        max_steps=4,
+        max_child_depth=1,
+        max_tokens=4000,
+        require_delegation=True,
+    )
+    run = start_run(state, bot_id=parent.id, text="auth.py bypass auth", provider="script", model="script")
+    children = state.repo.list_children(run.id)
+    assert run.status == "succeeded"
+    assert len(children) == 2
+    assert children[1].input_text.startswith("FOLLOW-UP:")
+    assert "YOUR PREVIOUS RESULT" in children[1].input_text
+    assert '"risk_level": "high"' in children[1].input_text
+    assert "CASE:\nauth.py bypass auth" in children[1].input_text
+
+
+def test_follow_up_page_runs_the_same_bot_again(app):
+    from fastapi.testclient import TestClient
+
+    client = TestClient(app)
+    created = client.post(
+        "/api/runs",
+        json={"bot_id": "security-checker", "provider": "demo", "input": "auth.py bypass auth"},
+    )
+    run_id = created.json()["run"]["id"]
+    page = client.post(f"/runs/{run_id}/follow-up", data={"task": "Confirm the file name."})
+    assert page.status_code == 200
+    assert "YOUR PREVIOUS RESULT" in page.text
+    assert "high" in page.text
+    assert "Ask a follow-up" in page.text
+
+
 def test_token_budget_stops_the_run(app):
     state = app.state.work
     state.providers["script"] = ScriptProvider(

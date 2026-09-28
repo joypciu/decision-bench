@@ -4,10 +4,38 @@
 <header class="page-head">
   <div>
     <p class="eyebrow">Workbench</p>
-    <h1>Runs</h1>
+    <h1>Review a case</h1>
+    <p class="lede">Paste a diff or an incident. A lead bot sends it to the specialist checkers and returns one decision.</p>
   </div>
-  <a class="button" href="/bots/new">Create a bot</a>
 </header>
+<form class="panel form start-form" method="post" action="/runs">
+  <label class="wide">
+    <span>Case</span>
+    <textarea name="input" rows="8" required placeholder="Paste a pull request diff or an incident report"></textarea>
+  </label>
+  <div class="split three">
+    <label>
+      <span>Bot</span>
+      <select name="bot_id">
+        {% for bot in bots %}
+        <option value="{{ bot.id }}" {% if bot.id == 'change-lead' %}selected{% endif %}>{{ bot.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      <span>Provider</span>
+      <select name="provider">
+        {% for provider in chat_provider_rows %}
+        <option value="{{ provider.name }}" {% if provider.name == 'demo' %}selected{% endif %}>{{ provider.name }}{% if not provider.configured %} — needs a key{% endif %}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <div class="start-submit">
+      <button class="button" type="submit">Review</button>
+    </div>
+  </div>
+  <p class="hint">Demo answers on this machine. A live provider needs a key in Settings and available quota.</p>
+</form>
 <section class="grid stats">
   <article>
     <p class="label">Bots</p>

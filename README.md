@@ -1,12 +1,12 @@
 # Decision Bench
 
-Decision Bench is a local workbench for structured decisions. A bot you create can spawn specialist bots, every model call is checked against a JSON schema, and the same gold cases can be scored on more than one provider.
+Decision Bench is a local workbench for structured decisions. A lead bot spawns specialist bots, each answer has to match a JSON schema, and the same gold cases can be scored on more than one model provider.
 
-The first jobs are a change-risk review and an incident triage. The demo provider runs both, including their sub-agents, without an API key. Gemini and OpenRouter are the live adapters.
+The two jobs in the box are a change-risk review (`ship`, `revise`, or `block`) and an incident triage (`sev1`, `sev2`, or `sev3`). The demo provider runs both, including their sub-agents, with no API key. Gemini and any OpenAI-compatible endpoint are the live adapters.
 
-## Run it
+## Try the demo
 
-From this directory, on Python 3.11+:
+Install and start the app (Python 3.11+):
 
 ```powershell
 py -m venv .venv
@@ -16,30 +16,45 @@ copy .env.example .env
 py -m decision_bench
 ```
 
-Open [http://127.0.0.1:8000](http://127.0.0.1:8000). Documents accepts markdown, text, HTML, CSV, JSON, XML, PDF, images, Word, PowerPoint, and Excel. PDF and image crops limit extraction to one region. Image and cropped PDF text uses Windows OCR when `winocr` is installed, or Tesseract when it is on the path. Conversion of the other formats uses [MarkItDown](https://github.com/microsoft/markitdown).
+Open [http://127.0.0.1:8000](http://127.0.0.1:8000). Leave the bot on **Change-risk lead** and the provider on **demo**. Paste this diff and click **Review**:
 
-```bash
-pytest
-docker compose up --build
+```text
+diff --git a/auth.py b/auth.py
+--- a/auth.py
++++ b/auth.py
+@@ -4,7 +4,7 @@ def allow(user):
+-    if user.is_authenticated:
++    if True:  # bypass auth
+         return True
+     return False
 ```
 
-Put a key in `.env` before the first launch, or add it afterward under **Settings**. The database copy is what the app uses after that. `.env` and the database are gitignored.
+The run page should show **block** in a few hundred milliseconds. Under it, one risk:
 
-- `GEMINI_API_KEY` from [Google AI Studio](https://aistudio.google.com/apikey). Default model: `gemini-3.6-flash`.
-- `OPENROUTER_API_KEY` from [OpenRouter](https://openrouter.ai/). Default model: `openrouter/free`.
+| Severity | File | Reason |
+| --- | --- | --- |
+| high | auth.py | Authentication or secret handling was weakened. |
 
-To add another model, open Settings. Groq, Cerebras, Mistral, Together, Fireworks, DeepInfra, Hugging Face, SambaNova, Ollama, and LM Studio are already listed, using the same OpenAI-compatible chat API documented by each vendor. Tavily, Brave, and Exa are listed as search providers. Paste the API key, enable the row, and save. Ollama (`http://127.0.0.1:11434/v1`) and LM Studio (`http://127.0.0.1:1234/v1`) do not need a key when they are running locally.
+Three checkers run under that lead. Open each one from the chips on the run page.
 
-Bots can call `web_search` without a key. That uses Wikipedia and DuckDuckGo. If a Tavily, Brave, or Exa key is enabled, those results are included too. `fetch_url` reads one public page. Several `delegate` calls in the same turn, or one `delegate_parallel` call, run the child bots at the same time.
+| Checker | Result |
+| --- | --- |
+| Security | `risk_level` high, finding on `auth.py` |
+| Migration | `risk_level` none, no schema change |
+| Research | no external lookup, empty `sources` |
 
-## How a run moves
+That is a saved demo run, not a live model. The demo provider is deterministic, so this result does not depend on an API key or a quota. `pytest` uses the same provider.
+
+On a finished run, **Ask a follow-up** starts that bot again. The new run includes your question, the previous structured result, and the original case. A lead can do the same thing by calling `delegate` a second time for a bot that already returned.
+
+## What a run is
 
 ```text
 task pack (schema, rubric, gold cases)
         |
         v
-bot version ---- engine loop ---- provider port ---- demo | gemini | openrouter
-                    |  delegate
+bot version ---- engine loop ---- provider port ---- demo | gemini | openai-compatible
+                    |  delegate / delegate_parallel
                     v
               child bot run
                     |
@@ -47,33 +62,69 @@ bot version ---- engine loop ---- provider port ---- demo | gemini | openrouter
               storage port ---- SQLite
 ```
 
-The engine loads one bot version and loops until the model calls `finish`, the step budget ends, or the token budget ends. `delegate` starts another run of an allowlisted bot and waits for it. Depth, steps, and tokens are hard limits. A bot cannot call a shell. The tool list is `read_case`, `delegate`, and `finish`.
+A bot version pins the instructions, the provider, the model, the output schema, the tool allowlist, the child allowlist, and the budgets. A run stores that version id. Editing a bot writes a new version and leaves old runs alone.
 
-A run can succeed and still fail the rubric. Success means the JSON matched the schema. Passed means the gold checks matched too: expected fields, required evidence, and the minimum number of child runs.
+The engine loops until the model calls `finish`, the step budget ends, or the token budget ends. `delegate` starts another run of an allowlisted bot and waits for it. Several `delegate` calls in one turn, or one `delegate_parallel` call, run at the same time. Child depth is capped by the bot version, with an absolute ceiling of 8. There is no shell tool. A bot cannot execute code on the machine.
+
+Tools a version may allow: `read_case`, `delegate`, `delegate_parallel`, `web_search`, `fetch_url`, and `finish`. Only the research checker is given search and fetch. `web_search` uses Wikipedia, DuckDuckGo, and the [OSV](https://osv.dev) advisory API for a pinned package version. `fetch_url` reads one public page and refuses local or private addresses. Search and fetch are each limited to one call per run.
+
+**Succeeded** means the JSON matched the output schema. **Passed** means the gold checks matched too: expected fields, phrases that must appear, and the minimum number of child runs. A run can succeed and still fail the rubric.
+
+If one checker fails after the others have been called, the lead finishes from the checkers that succeeded and does not spend another model call. If the lead model itself becomes unavailable after the checkers have returned, the same assembly is used.
+
+## Design choices
+
+The provider port is `complete(model, messages, tools, schema)`. The engine never imports a vendor SDK. An OpenAI-compatible API, including OpenRouter, Groq, Ollama, and LM Studio, is one adapter. Gemini is another, because its tool-call protocol is different. A third protocol means a new class registered from `build_providers` in `src/decision_bench/providers/registry.py`.
+
+The storage port is `RunStore` in `src/decision_bench/ports.py`. SQLite is the implementation in `src/decision_bench/storage/sqlite.py`. Another database is a new class that implements those methods, not a connection-string swap. The engine receives the store as an argument.
+
+Task packs live in `packs/*.yaml`. A pack is the contract: output schema, gold cases, and the phrases a passing answer must mention. Bots are the workers. Swapping the provider on an eval run applies that provider to the whole tree, so two models can be compared on the same cases. When a run uses the bot's saved provider, each child keeps its own.
+
+The demo provider does not call the network. It reads the case text and the child outputs and returns schema-valid JSON. Live models follow the bot instructions. The gold set can therefore prove delegation and scoring before any key is configured.
+
+## Run the tests
+
+```powershell
+pytest
+```
+
+GitHub Actions runs the same suite on Python 3.12. `docker compose up --build` serves the app on port 8000.
+
+## Live providers
+
+Keys are optional. Put them in `.env` before the first launch, or add them later under **Settings**. After the first boot, the database copy is what the app uses. `.env` and `data/` are gitignored. The UI and the API show only the last four characters of a key.
+
+- `GEMINI_API_KEY` from [Google AI Studio](https://aistudio.google.com/apikey). Default model: `gemini-3.6-flash`.
+- `OPENROUTER_API_KEY` from [OpenRouter](https://openrouter.ai/). Default model: `openrouter/free`.
+
+Settings already lists Groq, Cerebras, Mistral, Together, Fireworks, DeepInfra, Hugging Face, SambaNova, Ollama, and LM Studio. Each uses that vendor's OpenAI-compatible chat API. Paste a key, enable the row, and save. Ollama (`http://127.0.0.1:11434/v1`) and LM Studio (`http://127.0.0.1:1234/v1`) do not need a key when the local server is running. Tavily, Brave, and Exa are search rows. They are not chat models.
+
+## Documents
+
+**Documents** turns an upload into text you can send to a bot. Markdown, text, HTML, CSV, JSON, XML, PDF, and Office files go through [MarkItDown](https://github.com/microsoft/markitdown). Images, and PDF crops, use Windows OCR when `winocr` is installed, or Tesseract when it is on the path. Crop left, top, right, and bottom limit extraction to one region. This is separate from the decision loop.
 
 ## Where to extend it
 
-**Provider.** Add an OpenAI-compatible endpoint or a Gemini key from Settings. A new Python adapter is only needed for a protocol that is not one of those two. Implement `complete(model, messages, tools, schema)` and register it from `build_providers` in `src/decision_bench/providers/registry.py`.
+**Provider.** Add an OpenAI-compatible or Gemini row in Settings. A new protocol implements `complete` and is registered from `build_providers`.
 
-**Database.** Implement the `RunStore` methods in `src/decision_bench/ports.py`. SQLite is `src/decision_bench/storage/sqlite.py`. The engine receives the store as an argument.
+**Database.** Implement `RunStore`. Point the app at that class. The engine stays unchanged.
 
 **Task pack.** Add a YAML file under `packs/` with an output schema and gold cases. Restart the app.
 
-**Tool.** Add a name to the allowlist in `tool_specs` and handle it in the engine loop. Bots opt in by version, so an old run stays pinned to the tools it had.
+**Tool.** Add the name in `tool_specs`, handle it in the engine loop, and opt a bot version into it. Older runs stay pinned to the tools they had.
 
-**Bot.** Saving a bot writes a new version. Runs store that version id. Editing instructions does not rewrite history.
+**Bot.** Create one in the UI, or edit a built-in checker by saving a new version. A version chooses its children from the allowlist.
 
 ## Layout
 
 | Path | Role |
 | --- | --- |
-| `src/decision_bench/engine.py` | Step loop, delegation, schema gate |
+| `src/decision_bench/engine.py` | Step loop, delegation, follow-ups, schema gate |
 | `src/decision_bench/providers/` | Demo, Gemini, and OpenAI-compatible adapters |
 | `src/decision_bench/provider_admin.py` | Saved provider keys and reload |
-| `src/decision_bench/storage/sqlite.py` | System of record |
+| `src/decision_bench/storage/sqlite.py` | SQLite `RunStore` |
+| `src/decision_bench/ports.py` | `ModelProvider` and `RunStore` |
 | `src/decision_bench/web/` | HTTP API and HTML client |
 | `web/` | Templates and CSS |
-| `packs/` | Checked-in jobs and gold cases |
-| `tests/` | Engine, HTTP, and adapter tests |
-
-The demo provider is deterministic so `pytest` and a fresh clone do not need network access. Live models follow the bot instructions; the demo provider follows the case text and the child outputs. That split is why the gold set can prove the engine before a key is configured.
+| `packs/` | Change-risk and incident-triage contracts |
+| `tests/` | Engine, HTTP, search, documents, and adapter tests |
