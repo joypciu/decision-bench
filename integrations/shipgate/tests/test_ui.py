@@ -6,7 +6,7 @@ from shipgate.app import INCIDENT_REPORT, MIGRATION_DIFF, README_DIFF, SAMPLE_DI
 
 
 def test_home_page_reviews_a_pasted_diff(monkeypatch, tmp_path):
-    monkeypatch.setenv("DECISION_BENCH_ROOT", str(Path(__file__).resolve().parents[2] / "decision-bench"))
+    monkeypatch.setenv("DECISION_BENCH_ROOT", str(Path(__file__).resolve().parents[3]))
     monkeypatch.setenv("SHIPGATE_DATA", str(tmp_path))
     monkeypatch.delenv("GITHUB_APP_ID", raising=False)
     app = create_app()

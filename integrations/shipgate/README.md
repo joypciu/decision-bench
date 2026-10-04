@@ -1,5 +1,11 @@
 # Shipgate
 
+This integration is now maintained inside **Decision Bench**, with its full
+history retained. From the Decision Bench root, install with
+`pip install -e ".[dev]" -e "integrations/shipgate[dev]"`, then run
+`python -m shipgate`. The separate Shipgate GitHub repository has been retired.
+The engine and UI remain separate applications within one repository.
+
 Shipgate is a GitHub App that reviews a pull request and posts one comment: **ship**, **revise**, or **block**, with a file and a reason for each risk. The repository is [joypciu/Shipgate](https://github.com/joypciu/Shipgate).
 
 The decision comes from [Decision Bench](https://github.com/joypciu/decision-bench). The change-risk lead spawns the security, migration, and research checkers. Shipgate submits one pull request review and sets a `shipgate` commit status. **Block** requests changes on the risky lines, **revise** leaves a comment, and **ship** approves. The check is pending while the review runs, then success for ship or failure for revise or block. A draft pull request is skipped until it is marked ready. The same commit is not reviewed twice.

@@ -19,7 +19,7 @@ def bench_root() -> Path:
     env = os.environ.get("DECISION_BENCH_ROOT")
     if env:
         return Path(env)
-    sibling = Path(__file__).resolve().parents[2] / "decision-bench"
+    sibling = Path(__file__).resolve().parents[3]
     if (sibling / "packs").is_dir():
         return sibling
     return Path("decision-bench")

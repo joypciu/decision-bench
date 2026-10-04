@@ -15,5 +15,24 @@ services:
     volumes:
       - bench-data:/data
 
+  shipgate:
+    build: .
+    profiles: [shipgate]
+    command: [shipgate]
+    ports:
+      - "8010:8010"
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8010
+      DECISION_BENCH_ROOT: /app
+      SHIPGATE_DATA: /data
+      SHIPGATE_PROVIDER: ${SHIPGATE_PROVIDER:-demo}
+      GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:-}
+      GITHUB_APP_ID: ${GITHUB_APP_ID:-}
+      GITHUB_APP_PRIVATE_KEY: ${GITHUB_APP_PRIVATE_KEY:-}
+    volumes:
+      - shipgate-data:/data
+
 volumes:
   bench-data:
+  shipgate-data:

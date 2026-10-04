@@ -13,6 +13,7 @@ from shipgate.comment import format_comment, review_event, status_for
 from shipgate.diffmap import diff_stats, inline_comments
 from shipgate.github import GitHub
 from shipgate.review import Reviewer
+from shipgate.paths import bench_root as find_bench_root
 from shipgate.store import DeliveryStore
 from shipgate.webhook import WebhookError, handle_webhook
 
@@ -27,8 +28,8 @@ def load_private_key() -> str:
 
 
 def create_app() -> FastAPI:
-    bench_root = Path(os.environ.get("DECISION_BENCH_ROOT", Path(__file__).resolve().parents[3] / "decision-bench"))
-    data = Path(os.environ.get("SHIPGATE_DATA", "data"))
+    bench_root = find_bench_root()
+    data = Path(os.environ.get("SHIPGATE_DATA", Path(__file__).resolve().parents[2] / "data"))
     reviewer = Reviewer.open(
         bench_root=bench_root,
         database=data / "decision_bench.sqlite",

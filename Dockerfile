@@ -12,7 +12,8 @@ COPY pyproject.toml README.md ./
 COPY src ./src
 COPY web ./web
 COPY packs ./packs
-RUN pip install --no-cache-dir .
+COPY integrations/shipgate ./integrations/shipgate
+RUN pip install --no-cache-dir . -e ./integrations/shipgate
 
-EXPOSE 8000
+EXPOSE 8000 8010
 CMD ["decision-bench"]

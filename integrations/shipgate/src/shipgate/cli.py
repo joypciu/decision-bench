@@ -6,20 +6,13 @@ from pathlib import Path
 
 from shipgate.comment import format_comment
 from shipgate.review import Reviewer
-
-
-def bench_root() -> Path:
-    env = os.environ.get("DECISION_BENCH_ROOT")
-    if env:
-        return Path(env)
-    sibling = Path(__file__).resolve().parents[3] / "decision-bench"
-    return sibling
+from shipgate.paths import bench_root
 
 
 def review_path(path: str) -> int:
     reviewer = Reviewer.open(
         bench_root=bench_root(),
-        database=Path(os.environ.get("SHIPGATE_DATA", "data")) / "cli.sqlite",
+        database=Path(os.environ.get("SHIPGATE_DATA", Path(__file__).resolve().parents[2] / "data")) / "cli.sqlite",
         provider=os.environ.get("SHIPGATE_PROVIDER", "demo"),
     )
     review = reviewer.review(Path(path).read_text(encoding="utf-8"))

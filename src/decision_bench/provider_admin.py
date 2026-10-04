@@ -16,6 +16,7 @@ PROTECTED = {"demo", "gemini", "openrouter"}
 
 
 FREE_PRESETS = (
+    ("ai-gateway", "openai", "http://127.0.0.1:8080/v1", "local/local-model"),
     ("groq", "openai", "https://api.groq.com/openai/v1", "llama-3.3-70b-versatile"),
     ("cerebras", "openai", "https://api.cerebras.ai/v1", "llama3.1-8b"),
     ("mistral", "openai", "https://api.mistral.ai/v1", "open-mistral-nemo"),

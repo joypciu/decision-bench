@@ -1,5 +1,32 @@
 # Decision Bench
 
+Shipgate is now maintained in this repository under `integrations/shipgate/`.
+Its complete Git history was merged without squashing. Install both applications
+from this checkout:
+
+```powershell
+pip install -e ".[dev]" -e "integrations/shipgate[dev]"
+python -m decision_bench  # workbench, port 8000
+python -m shipgate        # GitHub integration, port 8010 (separate terminal)
+```
+
+Shipgate locates the task packs in this checkout automatically; no sibling
+`E:\shipgate` directory is required. Configure its GitHub settings using
+`integrations/shipgate/.env.example`. Environment variables must be loaded into
+the shell before launch. Set `SHIPGATE_DATA` to an absolute directory to choose
+where Shipgate keeps its state. Existing local state was preserved under
+`integrations/shipgate/data/`.
+
+AI Gateway remains a separate service for credentials, provider access and
+usage accounting. In **Settings**, enable the `ai-gateway` preset, enter a
+gateway user key, and set the model to a registered `<provider>/<model>` ID.
+Use the gateway's `/v1` base URL. Select that provider on bots/evaluations; for
+Shipgate set `SHIPGATE_PROVIDER=ai-gateway`. A preset alone does not start or
+configure AI Gateway.
+
+Run both suites with `pytest` and
+`pytest --import-mode=importlib integrations/shipgate/tests`.
+
 Decision Bench is a local workbench for structured decisions. A lead bot spawns specialist bots, each answer has to match a JSON schema, and the same gold cases can be scored on more than one model provider.
 
 The two jobs in the box are a change-risk review (`ship`, `revise`, or `block`) and an incident triage (`sev1`, `sev2`, or `sev3`). The demo provider runs both, including their sub-agents, with no API key. Gemini and any OpenAI-compatible endpoint are the live adapters.

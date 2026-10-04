@@ -48,7 +48,7 @@ def signed(body: bytes) -> str:
 
 def test_webhook_route_blocks_the_auth_bypass(monkeypatch, tmp_path):
     monkeypatch.setenv("GITHUB_WEBHOOK_SECRET", SECRET)
-    monkeypatch.setenv("DECISION_BENCH_ROOT", str(Path(__file__).resolve().parents[2] / "decision-bench"))
+    monkeypatch.setenv("DECISION_BENCH_ROOT", str(Path(__file__).resolve().parents[3]))
     monkeypatch.setenv("SHIPGATE_DATA", str(tmp_path))
     monkeypatch.delenv("GITHUB_APP_ID", raising=False)
     monkeypatch.delenv("GITHUB_APP_PRIVATE_KEY", raising=False)
