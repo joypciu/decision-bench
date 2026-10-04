@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Review a diff · Shipgate{% endblock %}
+{% block content %}
+<section class="hero">
+  <div>
+    <p class="eyebrow">Pull request gate</p>
+    <h1>Paste a diff. Get a decision.</h1>
+    <p class="lede">Shipgate runs the change-risk lead and its checkers, then shows ship, revise, or block with the file that caused it.</p>
+  </div>
+</section>
+{% if error %}<p class="banner">{{ error }}</p>{% endif %}
+{% if review %}
+<section class="verdict verdict-{{ review.verdict }}">
+  <div>
+    <p class="eyebrow">Verdict</p>
+    <h2>{{ review.verdict }}</h2>
+    <p>{{ review.summary }}</p>
+  </div>
+  <span class="pill">{{ review.status }}</span>
+</section>
+{% if review.verdict in ["ship", "revise", "block"] %}
+<ul class="facts">
+  <li><span>GitHub review</span><strong>{{ github_event }}</strong></li>
+  <li><span>Commit check</span><strong>{{ commit_state }}</strong></li>
+  {% if stats.files %}<li><span>Diff</span><strong>{{ stats.files }} file{% if stats.files != 1 %}s{% endif %} · +{{ stats.added }} −{{ stats.removed }}</strong></li>{% endif %}
+</ul>
+{% elif stats.files %}
+<p class="quiet">{{ stats.files }} files · +{{ stats.added }} −{{ stats.removed }}</p>
+{% endif %}
+{% if review.risks %}
+<ul class="risks">
+  {% for risk in review.risks %}
+  <li>
+    <span class="sev sev-{{ risk.severity }}">{{ risk.severity }}</span>
+    <code>{{ risk.file }}</code>
+    <p>{{ risk.reason }}</p>
+    {% for line in lines if line.path == risk.file or line.path.endswith('/' + risk.file) %}
+    <p class="quiet">Comment on line {{ line.line }}</p>
+    {% endfor %}
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="quiet">No file-level risks.</p>
+{% endif %}
+<section class="panel comment-panel">
+  <div class="panel-head">
+    <h2>Pull request review</h2>
+    <button class="ghost" type="button" id="copy-comment">Copy</button>
+  </div>
+  <pre id="comment-text">{{ comment }}</pre>
+</section>
+{% endif %}
+<form class="panel" method="post" action="/reviews">
+  <div class="panel-head">
+    <h2>Case</h2>
+    <div class="samples">
+      {% for item in samples %}
+      <button class="ghost" type="button" data-sample="{{ item.id }}">{{ item.label }}</button>
+      {% endfor %}
+    </div>
+  </div>
+  <label>
+    <span>Job</span>
+    <select name="bot_id" id="bot-id">
+      {% for id, label in jobs.items() %}
+      <option value="{{ id }}" {% if bot_id == id %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <textarea name="diff" rows="14" required placeholder="Paste a unified diff or an incident report">{{ diff }}</textarea>
+  <div class="actions">
+    <button class="primary" type="submit">Review</button>
+    <p class="quiet">Uses the {{ provider }} provider. Nothing is posted to GitHub from this page.</p>
+  </div>
+</form>
+{% if recent %}
+<section class="panel">
+  <h2>Recent reviews</h2>
+  <ul class="recent">
+    {% for item in recent %}
+    <li><strong>{{ item.verdict }}</strong> <span>{{ jobs.get(item.bot_id, item.bot_id) }}</span> <span class="quiet">{{ item.summary }}</span></li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+<script id="sample-diff" type="application/json">{{ samples | tojson }}</script>
+{% endblock %}
