@@ -1,0 +1,142 @@
+:root {
+  --bg: #f5f7fb;
+  --ink: #192640;
+  --muted: #79849a;
+  --panel: #fff;
+  --line: #e5eaf3;
+  --accent: #5364e7;
+  --accent-ink: #fff;
+  --ship: #21846d;
+  --revise: #a97b23;
+  --block: #bc4558;
+}
+body {
+  font-family: "Segoe UI", system-ui, sans-serif;
+  font-size: 14px;
+  background: var(--bg);
+}
+.top {
+  padding: 24px 34px;
+  background: var(--panel);
+  color: var(--ink);
+  border-bottom: 1px solid var(--line);
+}
+.top p {
+  font-size: 11px;
+  color: var(--muted);
+}
+.brand {
+  font-size: 17px;
+  letter-spacing: -0.4px;
+}
+.brand span {
+  width: 35px;
+  height: 35px;
+  background: var(--accent);
+  color: white;
+  border-radius: 11px;
+}
+main {
+  max-width: 1040px;
+  padding-top: 40px;
+}
+.hero h1 {
+  font-size: clamp(28px, 4vw, 42px);
+  letter-spacing: -1.5px;
+  font-weight: 650;
+}
+.eyebrow {
+  color: var(--accent);
+  font-size: 9px;
+  letter-spacing: 1.6px;
+}
+.lede {
+  font-size: 13px;
+  line-height: 1.8;
+}
+.panel,
+.verdict,
+.risks li {
+  border-radius: 13px;
+  box-shadow: 0 7px 24px #19264004;
+  padding: 23px;
+}
+.panel h2 {
+  font-size: 16px;
+}
+.pill,
+.sev {
+  border-radius: 6px;
+  font-size: 10px;
+}
+.ghost,
+.primary,
+button {
+  font-family: inherit;
+  font-size: 11px;
+  border-radius: 8px;
+}
+textarea,
+input,
+select {
+  font-family: Consolas, monospace;
+  font-size: 12px;
+  border-radius: 9px;
+}
+pre {
+  font-family: Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.7;
+}
+.facts li {
+  border-radius: 10px;
+}
+.quiet {
+  font-size: 11px;
+}
+button:focus-visible,
+a:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --bg: #101522;
+    --ink: #e5eafa;
+    --muted: #98a4bc;
+    --panel: #171e2e;
+    --line: #2b3449;
+    --accent: #929eff;
+    --ship: #65d4ad;
+    --block: #ff9daf;
+  }
+  .verdict-ship,
+  .verdict-block,
+  .verdict-revise {
+    background: var(--panel);
+  }
+  textarea,
+  select {
+    background: var(--bg);
+    color: var(--ink);
+  }
+}
+@media (max-width: 700px) {
+  .top {
+    padding: 18px;
+    flex-wrap: wrap;
+  }
+  .top p {
+    display: none;
+  }
+  main {
+    padding-top: 24px;
+  }
+  .panel-head {
+    flex-wrap: wrap;
+  }
+  .panel {
+    padding: 18px;
+  }
+}

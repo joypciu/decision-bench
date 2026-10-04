@@ -2,6 +2,28 @@ const data = document.getElementById("pack-data");
 const select = document.getElementById("pack-select");
 const schema = document.getElementById("schema");
 
+const samples = {
+  security: {bot:"change-lead",text:"diff --git a/auth.py b/auth.py\n--- a/auth.py\n+++ b/auth.py\n@@ -1,2 +1,2 @@\n-    if user.is_authenticated:\n+    if True:  # bypass auth\n         return True"},
+  safe: {bot:"change-lead",text:"diff --git a/README.md b/README.md\n--- a/README.md\n+++ b/README.md\n@@ -1 +1 @@\n-Run the application.\n+Run the application with python -m app."},
+  incident: {bot:"incident-lead",text:"Production checkout is unavailable for all customers. The error rate reached 100% after the latest deployment. On-call has been paged. Rollback has not started. We do not yet know whether payments were lost."},
+};
+document.querySelectorAll("[data-case]").forEach(button=>button.addEventListener("click",()=>{
+  const form=document.querySelector('form[action="/runs"]');
+  const sample=samples[button.dataset.case];
+  if(form&&sample){form.elements.input.value=sample.text;form.elements.bot_id.value=sample.bot;form.elements.input.focus();}
+}));
+function filterRuns(){
+  const query=(document.getElementById("run-search")?.value||"").toLowerCase();
+  const status=document.getElementById("run-status")?.value||"all";
+  let count=0;
+  document.querySelectorAll("[data-run-row]").forEach(row=>{row.hidden=!row.dataset.search.toLowerCase().includes(query)||(status!=="all"&&row.dataset.status!==status);if(!row.hidden)count++;});
+  const label=document.getElementById("run-count");if(label)label.textContent=`${count} runs`;
+  const empty=document.getElementById("no-run-matches");if(empty)empty.hidden=count>0;
+}
+document.getElementById("run-search")?.addEventListener("input",filterRuns);
+document.getElementById("run-status")?.addEventListener("change",filterRuns);
+document.addEventListener("keydown",event=>{if(event.key==="/"&&!event.ctrlKey&&!event.metaKey&&!/INPUT|TEXTAREA|SELECT/.test(event.target.tagName)){const search=document.getElementById("run-search");if(search){event.preventDefault();search.focus();}}});
+
 if (data && select && schema) {
   const packs = JSON.parse(data.textContent || "[]");
   select.addEventListener("change", () => {

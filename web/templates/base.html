@@ -11,15 +11,13 @@
       document.documentElement.setAttribute("data-theme", theme);
     })();
   </script>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@500;600;700&family=Fraunces:opsz,wght@9..144,560;9..144,640&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/app.css">
+  <link rel="stylesheet" href="/static/modern.css">
 </head>
 <body>
   <div class="shell">
     <header class="topbar">
-      <a class="mark" href="/"><span class="mark-badge">DB</span> Decision Bench</a>
+      <a class="mark" href="/"><span class="mark-badge">DB</span><span>Decision Bench<small>From evidence to action</small></span></a>
       <nav>
         <a class="{% if active == 'home' %}active{% endif %}" href="/">Runs</a>
         <a class="{% if active == 'bots' %}active{% endif %}" href="/bots">Bots</a>
@@ -32,6 +30,7 @@
         <button type="button" data-theme-value="light" aria-pressed="false">Light</button>
         <button type="button" data-theme-value="dark" aria-pressed="false">Dark</button>
       </div>
+      <p class="rail-note">A clearer decision.<br>A trace you can follow.</p>
     </header>
     <div class="readybar">
       <span class="label">Ready</span>

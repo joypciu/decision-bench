@@ -4,10 +4,16 @@
 <header class="page-head">
   <div>
     <p class="eyebrow">Workbench</p>
-    <h1>Review a case</h1>
+    <h1>Your next decision, made clearer.</h1>
     <p class="lede">Paste a diff or an incident. A lead bot sends it to the specialist checkers and returns one decision.</p>
   </div>
 </header>
+<div class="starter-row" role="group" aria-label="Sample cases">
+  <span class="label">Start with a sample</span>
+  <button class="button ghost" type="button" data-case="security">Security review ↗</button>
+  <button class="button ghost" type="button" data-case="incident">Incident triage ↗</button>
+  <button class="button ghost" type="button" data-case="safe">Documentation change ↗</button>
+</div>
 <form class="panel form start-form" method="post" action="/runs">
   <label class="wide">
     <span>Case</span>
@@ -57,6 +63,11 @@
     <h2>Recent runs</h2>
     <a href="/evals">Score a gold set</a>
   </div>
+  <div class="run-filters">
+    <input id="run-search" type="search" aria-label="Search recent runs" placeholder="Search bots, providers or decisions…">
+    <select id="run-status" aria-label="Filter run status"><option value="all">All statuses</option><option value="succeeded">Succeeded</option><option value="failed">Failed</option><option value="running">Running</option></select>
+    <span id="run-count" class="label">{{ runs|length }} runs</span>
+  </div>
   {% if runs %}
   <table>
     <thead>
@@ -64,7 +75,7 @@
     </thead>
     <tbody>
       {% for run in runs %}
-      <tr>
+      <tr data-run-row data-status="{{ run.status }}" data-search="{{ bot_names.get(run.bot_id, run.bot_id) }} {{ run.provider }} {{ run.output | decision or '' }} {{ run.status }}">
         <td><a href="/runs/{{ run.id }}">{{ bot_names.get(run.bot_id, run.bot_id) }}</a></td>
         <td>{{ run.output | decision or "—" }}</td>
         <td>{{ run.provider }}</td>
@@ -74,6 +85,7 @@
       {% endfor %}
     </tbody>
   </table>
+  <p id="no-run-matches" class="empty" hidden>No matching runs. Try a different search.</p>
   {% else %}
   <p class="empty">No runs yet. Open a lead bot and paste a diff or an incident.</p>
   {% endif %}

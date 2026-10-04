@@ -1,5 +1,12 @@
 # Decision Bench
 
+The refreshed workspace includes light/dark themes, sample cases, searchable
+history (the latest 100 root runs), status filters, and JSON report downloads.
+Press `/` to focus run search. A run's **Download report** exports its decision,
+input, specialist tree and trace through `GET /api/runs/{id}/export`.
+Shipgate's review page uses the same visual style. Interface fonts are local,
+so the UI does not depend on Google Fonts.
+
 Shipgate is now maintained in this repository under `integrations/shipgate/`.
 Its complete Git history was merged without squashing. Install both applications
 from this checkout:

@@ -6,7 +6,7 @@ from dataclasses import asdict
 from urllib.parse import quote
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, JSONResponse
 
 from decision_bench.documents import extract_document
 from decision_bench.domain import BotVersion
@@ -80,6 +80,16 @@ def register_routes(app: FastAPI) -> None:
             raise HTTPException(status_code=404, detail="Run not found.")
         return tree_dict(node)
 
+    @app.get("/api/runs/{run_id}/export")
+    def export_run(run_id: str):
+        node = run_tree(work(app), run_id)
+        if node is None:
+            raise HTTPException(status_code=404, detail="Run not found.")
+        return JSONResponse(
+            {"format_version": 1, "tree": tree_dict(node)},
+            headers={"Content-Disposition": f'attachment; filename="decision-{node.run.id}.json"'},
+        )
+
     @app.post("/api/evals")
     def api_eval(body: dict) -> dict:
         state = work(app)
@@ -102,7 +112,7 @@ def register_routes(app: FastAPI) -> None:
             request,
             "dashboard.html",
             active="home",
-            runs=state.repo.list_root_runs(12),
+            runs=state.repo.list_root_runs(100),
             evals=state.repo.list_evals(5),
             bot_names=bot_name_map(state),
         )

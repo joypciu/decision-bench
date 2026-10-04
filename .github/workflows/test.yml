@@ -18,3 +18,4 @@ jobs:
         run: |
           pytest
           pytest --import-mode=importlib integrations/shipgate/tests
+      - run: node --check web/static/app.js
