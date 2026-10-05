@@ -7,6 +7,11 @@ inference. Existing summary-only history is retained and marked **Summary only**
 **Review history** opens a paginated view of all saved local reviews, with summary
 search and verdict filters. Search covers the stored summary (up to 180 characters),
 with literal `%` and `_` characters. Filter selections carry through page links.
+**Compare reviews** shows two complete saved snapshots side by side: verdicts,
+review jobs, run status, risks, diff counts, and expandable original inputs.
+Bookmarks retain the selected IDs; **Download comparison** exports both stored
+snapshots as JSON. Different inputs or review jobs are flagged for context.
+Comparison does not rerun inference or establish that a listed risk was fixed.
 The local dashboard and saved-review routes use the same access model; use your
 deployment's access controls when sharing this service beyond your machine.
 

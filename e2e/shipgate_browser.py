@@ -100,6 +100,36 @@ with tempfile.TemporaryDirectory(prefix="shipgate-browser-") as directory:
                 page.screenshot(path=os.environ["SHIPGATE_HISTORY_SCREENSHOT"], full_page=True)
             page.get_by_role("link", name="Open review #2", exact=False).click()
             expect(page.locator(".verdict h2")).to_have_text("ship")
+            page.set_viewport_size({"width": 1440, "height": 1000})
+            page.get_by_role("link", name="Compare this review", exact=True).click()
+            expect(page.get_by_label("Baseline review", exact=True)).to_have_value("2")
+            page.get_by_label("Baseline review", exact=True).select_option("1")
+            page.get_by_label("Candidate review", exact=True).select_option("2")
+            page.get_by_role("button", name="Compare saved reviews", exact=True).click()
+            expect(page.get_by_label("Baseline snapshot").locator(".snapshot-verdict")).to_have_text("block")
+            expect(page.get_by_label("Candidate snapshot").locator(".snapshot-verdict")).to_have_text("ship")
+            expect(page.get_by_text("These reviews use different diffs", exact=False)).to_be_visible()
+            page.get_by_text("Original baseline diff", exact=True).click()
+            expect(page.get_by_label("Baseline snapshot").locator("pre")).to_contain_text("bypass auth")
+            with page.expect_download() as comparison_download:
+                page.get_by_role("link", name="Download comparison", exact=True).click()
+            assert comparison_download.value.failure() is None
+            comparison = page.request.get(comparison_download.value.url).json()
+            assert comparison["baseline"]["review"] == exported["review"]
+            assert comparison["candidate"]["review"]["verdict"] == "ship"
+            page.reload()
+            expect(page.get_by_label("Candidate review", exact=True)).to_have_value("2")
+            page.get_by_label("Candidate review", exact=True).select_option("1")
+            page.get_by_role("button", name="Compare saved reviews", exact=True).click()
+            expect(page.get_by_text("You selected the same review twice", exact=False)).to_be_visible()
+            page.get_by_label("Candidate review", exact=True).select_option("2")
+            page.get_by_role("button", name="Compare saved reviews", exact=True).click()
+            page.set_viewport_size({"width": 390, "height": 844})
+            if os.environ.get("SHIPGATE_COMPARE_SCREENSHOT"):
+                page.screenshot(path=os.environ["SHIPGATE_COMPARE_SCREENSHOT"], full_page=True)
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), page.evaluate("[...document.querySelectorAll('body *')].filter(e => e.getBoundingClientRect().right > innerWidth).map(e => ({tag:e.tagName,class:e.className,width:e.getBoundingClientRect().width})).slice(0,20)")
+            page.get_by_role("link", name="Open candidate review", exact=True).click()
+            expect(page.locator(".verdict h2")).to_have_text("ship")
             from shipgate.store import DeliveryStore
             fixture_store = DeliveryStore(Path(directory) / "shipgate.sqlite")
             for number in range(21):
@@ -120,6 +150,6 @@ with tempfile.TemporaryDirectory(prefix="shipgate-browser-") as directory:
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), page.evaluate("[...document.querySelectorAll('body *')].filter(e => e.getBoundingClientRect().right > innerWidth).map(e => ({tag:e.tagName,class:e.className,width:e.getBoundingClientRect().width})).slice(0,20)")
             assert not errors, errors
             browser.close()
-        print("PASS: review history/verdict/no matches/clear/reload/mobile/reopening, sample diff review, risks/comment, saved links, export action/content, real server restart, recent review reopening, second review, mobile; no browser exceptions")
+        print("PASS: saved review comparison/prefill/snapshots/diff/context warnings/export/reload/same selection/mobile/reopening, review history/verdict/no matches/clear/reload/mobile/reopening, sample diff review, risks/comment, saved links, export action/content, real server restart, recent review reopening, second review, mobile; no browser exceptions")
     finally:
         stop()

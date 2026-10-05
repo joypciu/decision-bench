@@ -130,6 +130,32 @@ def create_app() -> FastAPI:
             ),
         )
 
+    def comparison_payload(left: int | None, right: int | None):
+        snapshots = []
+        for identity in (left, right):
+            saved = app.state.store.get_local(identity) if identity else None
+            if identity and saved is None:
+                raise HTTPException(404, "Complete saved review not found. Summary-only reviews cannot be compared.")
+            snapshots.append(saved)
+        return snapshots
+
+    @app.get("/compare")
+    def compare_reviews(request: Request, left: int | None = Query(None, ge=1), right: int | None = Query(None, ge=1)):
+        snapshots = comparison_payload(left, right)
+        choices = [row for row in app.state.store.recent_local(100) if row["available"]]
+        for identity, saved in zip((left, right), snapshots):
+            if saved and not any(row["id"] == identity for row in choices):
+                choices.append({"id": identity, "verdict": saved["review"]["verdict"], "summary": saved["review"]["summary"]})
+        return templates.TemplateResponse(request, "compare.html", page_context(request,
+            left=left, right=right, snapshots=snapshots, choices=choices,
+            counts=[diff_stats(saved["diff"]) if saved else None for saved in snapshots]))
+
+    @app.get("/compare/export")
+    def export_review_comparison(left: int = Query(..., ge=1), right: int = Query(..., ge=1)):
+        first, second = comparison_payload(left, right)
+        return JSONResponse({"format_version": 1, "baseline": {"id": left, **first}, "candidate": {"id": right, **second}},
+                            headers={"Content-Disposition": 'attachment; filename="shipgate-comparison.json"'})
+
     @app.get("/reviews/{review_id}")
     def saved_review(request: Request, review_id: int):
         saved = app.state.store.get_local(review_id)

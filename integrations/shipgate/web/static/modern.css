@@ -154,6 +154,14 @@ a:focus-visible {
   margin: 20px 0;
 }
 .history-filters label { flex: 1 1 200px; min-width: 0; }
+.history-filters select { width: 100%; min-width: 0; max-width: 100%; }
 .history-filters input { width: 100%; box-sizing: border-box; padding: 12px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
 .history-filters input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .history-list time { color: var(--muted); font-size: .85rem; }
+.review-comparison { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.review-snapshot { min-width: 0; overflow-wrap: anywhere; }
+.review-snapshot pre { max-width: 100%; overflow: auto; }
+.review-snapshot .risks li { display: block; }
+.review-snapshot .risks code { margin-left: 8px; overflow-wrap: anywhere; }
+.review-snapshot select { max-width: 100%; }
+@media (max-width: 700px) { .review-comparison { grid-template-columns: 1fr; } }

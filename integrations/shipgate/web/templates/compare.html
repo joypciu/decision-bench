@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Compare reviews · Shipgate{% endblock %}
+{% block content %}
+<section class="panel"><p class="eyebrow">SAVED REVIEW COMPARISON</p><h1>Inspect the change in decisions.</h1><p>Compare stored snapshots without running inference.</p>
+<form class="history-filters" action="/compare" method="get">
+{% for title, name, chosen in [('Baseline review','left',left),('Candidate review','right',right)] %}
+<label>{{ title }}<select aria-label="{{ title }}" name="{{ name }}" required><option value="">Choose a saved review</option>{% for item in choices %}<option value="{{ item.id }}" {% if item.id == chosen %}selected{% endif %}>#{{ item.id }} · {{ item.verdict }} · {{ item.summary[:65] }}</option>{% endfor %}</select></label>
+{% endfor %}<button class="primary" type="submit">Compare saved reviews</button></form>
+<p class="quiet">Selectors list complete reviews among the latest 100 records, plus selected older reviews. Summary-only records remain in history.</p>
+</section>
+{% if snapshots[0] and snapshots[1] %}
+{% set first = snapshots[0] %}{% set second = snapshots[1] %}
+{% if left == right %}<p class="banner">You selected the same review twice. Choose another candidate to inspect a change.</p>{% endif %}
+{% if first.diff != second.diff %}<p class="banner">These reviews use different diffs. Compare their inputs before interpreting the verdict change.</p>{% endif %}
+{% if first.bot_id != second.bot_id %}<p class="banner">These reviews use different review jobs. Their verdicts may represent different criteria.</p>{% endif %}
+<p class="quiet">A change in verdict does not establish that a risk was fixed. Inspect both diffs and the listed reasons.</p>
+<div class="saved-actions"><a class="ghost" href="/compare/export?left={{ left }}&amp;right={{ right }}">Download comparison</a></div>
+<div class="review-comparison">
+{% for title, saved, identity, stats in [('Baseline',first,left,counts[0]),('Candidate',second,right,counts[1])] %}
+<section class="panel review-snapshot" aria-label="{{ title }} snapshot">
+<p class="eyebrow">{{ title }} · #{{ identity }}</p><h2 class="snapshot-verdict">{{ saved.review.verdict }}</h2><p>{{ saved.review.summary }}</p>
+<ul class="facts"><li><span>Review job</span><strong>{{ jobs.get(saved.bot_id, saved.bot_id) }}</strong></li><li><span>Run status</span><strong>{{ saved.review.status }}</strong></li><li><span>Risks listed</span><strong>{{ saved.review.risks|length }}</strong></li><li><span>Diff</span><strong>{{ stats.files }} files · +{{ stats.added }} −{{ stats.removed }}</strong></li></ul>
+<p class="quiet">Run {{ saved.review.run_id }}</p><div class="saved-actions"><a class="ghost" href="/reviews/{{ identity }}">Open {{ title|lower }} review</a><a class="ghost" href="/reviews/{{ identity }}/export">Download {{ title|lower }}</a></div>
+<h3>File-level risks</h3><ul class="risks">{% for risk in saved.review.risks %}<li><span class="sev">{{ risk.severity }}</span><code>{{ risk.file }}</code><p>{{ risk.reason }}</p></li>{% else %}<li>No file-level risks were listed.</li>{% endfor %}</ul>
+<details><summary>Original {{ title|lower }} diff</summary><pre>{{ saved.diff }}</pre></details>
+</section>{% endfor %}
+</div>
+{% else %}<p class="quiet">Choose two complete saved reviews to inspect their decisions and inputs.</p>{% endif %}
+{% endblock %}

@@ -71,3 +71,37 @@ def test_history_search_pagination_and_legacy_records(monkeypatch, tmp_path):
         assert client.get("/history?page=0").status_code == 422
         assert client.get("/history?verdict=invalid").status_code == 422
         assert client.get("/history", params={"q": "x"*121}).status_code == 422
+
+
+def test_saved_review_comparison_preserves_snapshots_without_inference(monkeypatch, tmp_path):
+    monkeypatch.setenv("DECISION_BENCH_ROOT", str(Path(__file__).resolve().parents[3]))
+    monkeypatch.setenv("SHIPGATE_DATA", str(tmp_path))
+    monkeypatch.setenv("SHIPGATE_PROVIDER", "demo")
+    app = create_app()
+    with TestClient(app) as client:
+        client.post("/reviews", data={"diff": SAMPLE_DIFF})
+        client.post("/reviews", data={"diff": "Update README documentation."})
+        original = client.get("/reviews/1/export").json()
+        monkeypatch.setattr(app.state.reviewer, "review", lambda *args: (_ for _ in ()).throw(AssertionError("Comparison must not run inference")))
+        response = client.get("/compare?left=1&right=2")
+        assert response.status_code == 200
+        assert "These reviews use different diffs" in response.text
+        assert "Original baseline diff" in response.text
+        assert "auth.py" in response.text
+        exported = client.get("/compare/export?left=1&right=2")
+        assert exported.status_code == 200
+        assert "attachment" in exported.headers["content-disposition"]
+        assert exported.json()["baseline"] == {"id": 1, **app.state.store.get_local(1)}
+        assert exported.json()["candidate"]["id"] == 2
+        assert client.get("/reviews/1/export").json() == original
+        assert "same review twice" in client.get("/compare?left=1&right=1").text
+        assert "Choose two complete saved reviews" in client.get("/compare").text
+        assert client.get("/compare?left=999").status_code == 404
+        assert client.get("/compare?left=0").status_code == 422
+        assert client.get("/compare/export?left=1").status_code == 422
+        legacy = app.state.store.add_local("change-lead", "ship", "Legacy")
+        assert client.get(f"/compare?left={legacy}&right=1").status_code == 404
+        # Older full reviews remain selectable when opened directly, even beyond the recent list.
+        for _ in range(100):
+            app.state.store.add_local("change-lead", "ship", "Legacy summary")
+        assert '<option value="1" selected>' in client.get("/compare?left=1&right=2").text

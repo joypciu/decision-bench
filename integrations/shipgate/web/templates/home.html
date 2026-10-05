@@ -10,7 +10,7 @@
 </section>
 {% if error %}<p class="banner">{{ error }}</p>{% endif %}
 {% if review %}
-{% if review_id %}<div class="saved-actions"><a class="ghost" href="/reviews/{{ review_id }}">Saved review #{{ review_id }}</a><a class="ghost" href="/reviews/{{ review_id }}/export">Download review</a></div>{% endif %}
+{% if review_id %}<div class="saved-actions"><a class="ghost" href="/reviews/{{ review_id }}">Saved review #{{ review_id }}</a><a class="ghost" href="/reviews/{{ review_id }}/export">Download review</a><a class="ghost" href="/compare?left={{ review_id }}">Compare this review</a></div>{% endif %}
 <section class="verdict verdict-{{ review.verdict }}">
   <div>
     <p class="eyebrow">Verdict</p>

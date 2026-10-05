@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 import json
+from contextlib import contextmanager
 from pathlib import Path
 
 
@@ -73,10 +74,15 @@ class DeliveryStore:
             ).fetchall()
         return [dict(row) for row in rows]
 
-    def _conn(self) -> sqlite3.Connection:
+    @contextmanager
+    def _conn(self):
         connection = sqlite3.connect(self.path)
         connection.row_factory = sqlite3.Row
-        return connection
+        try:
+            with connection:
+                yield connection
+        finally:
+            connection.close()
 
     def history_local(self, *, q: str = "", verdict: str = "all", page: int = 1, limit: int = 20) -> dict:
         clauses, params = [], []
