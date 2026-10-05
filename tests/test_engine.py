@@ -123,9 +123,10 @@ def test_invalid_finish_can_be_repaired(app):
 
 
 def test_parallel_delegates_overlap_and_a_failure_does_not_cancel_the_sibling(app):
-    import time
+    from threading import Barrier
 
     state = app.state.work
+    overlap = Barrier(2, timeout=10)
 
     class SlowProvider:
         name = "slow"
@@ -135,7 +136,9 @@ def test_parallel_delegates_overlap_and_a_failure_does_not_cancel_the_sibling(ap
 
         def complete(self, *, model, messages, tools, schema):
             del model, messages, tools, schema
-            time.sleep(0.5)
+            # Neither completion can finish until both calls are active.
+            # A serial implementation breaks the barrier and fails child success.
+            overlap.wait()
             return finish({"answer": "ok"})
 
     state.providers["slow"] = SlowProvider()
@@ -199,15 +202,13 @@ def test_parallel_delegates_overlap_and_a_failure_does_not_cancel_the_sibling(ap
         max_tokens=4000,
         require_delegation=True,
     )
-    started = time.perf_counter()
     run = start_run(state, bot_id=parent.id, text="case", provider="script", model="script")
-    elapsed = time.perf_counter() - started
     children = state.repo.list_children(run.id)
     assert run.status == "succeeded"
     assert run.output == {"answer": "done"}
     assert {child.bot_id for child in children} == {left.id, right.id}
     assert all(child.status == "succeeded" and child.provider == "slow" for child in children)
-    assert elapsed < 0.95
+    assert not overlap.broken
 
 
 def test_search_and_delegate_run_in_one_turn(app, monkeypatch):
