@@ -411,6 +411,26 @@ class SqliteRunStore:
             row = connection.execute("SELECT * FROM eval_runs WHERE id = ?", (eval_id,)).fetchone()
         return _eval(row) if row else None
 
+    def search_evals(self, *, q: str = "", outcome: str = "all", limit: int = 20, offset: int = 0) -> tuple[list[EvalRun], int]:
+        clauses, params = [], []
+        if q.strip():
+            term = q.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            columns = ["e.id", "e.bot_id", "b.name", "e.pack_id", "e.provider", "e.model"]
+            clauses.append("(" + " OR ".join(f"{column} LIKE ? ESCAPE '\\'" for column in columns) + ")")
+            params.extend([f"%{term}%"] * len(columns))
+        if outcome == "passed":
+            clauses.append("e.case_count > 0 AND e.pass_count = e.case_count")
+        elif outcome == "failed":
+            clauses.append("e.pass_count < e.case_count")
+        query = " FROM eval_runs e LEFT JOIN bots b ON b.id = e.bot_id"
+        if clauses:
+            query += " WHERE " + " AND ".join(clauses)
+        with self._conn() as connection:
+            total = connection.execute("SELECT COUNT(*)" + query, params).fetchone()[0]
+            rows = connection.execute("SELECT e.*" + query + " ORDER BY e.created_at DESC, e.id DESC LIMIT ? OFFSET ?",
+                                      [*params, limit, offset]).fetchall()
+        return [_eval(row) for row in rows], total
+
     def list_provider_configs(self) -> list[ProviderConfig]:
         with self._conn() as connection:
             rows = connection.execute(

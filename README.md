@@ -13,6 +13,10 @@ regardless of visible filters, with outcomes, scores, token counts, and run IDs.
 CSV preserves Unicode and guards potential spreadsheet formulas in text cells.
 `GET /api/evaluation-comparison.csv?left={id}&right={id}` downloads the comparison.
 `GET /api/evals/{id}` returns a stored evaluation; `/export` downloads its report.
+**Search all evaluations** opens paginated history with bot/pack/provider/model/ID
+search, all-pass or failed-case filters, saved-result links, and report downloads.
+Search applies before pagination and treats SQL wildcard characters literally.
+Filter selections remain in the URL across page navigation and reloads.
 
 **Review edited case** on a saved run opens its input, bot, provider, and model
 in an editable draft. Submitting creates a fresh run using the bot's current

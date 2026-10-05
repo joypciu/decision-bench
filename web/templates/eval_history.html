@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Evaluation history · Decision Bench{% endblock %}
+{% block content %}
+<header class="page-head"><div><p class="eyebrow">EVALUATION HISTORY</p><h1>Find a past evaluation.</h1><p class="lede">Search saved evaluations by bot name, pack, provider, model, or evaluation ID.</p></div><a class="button ghost" href="/evals">Run a gold set</a></header>
+<form class="panel form" method="get" action="/evals/history"><div class="eval-case-filters row-actions">
+<label>Search evaluations<input name="q" type="search" maxlength="120" value="{{ q }}" placeholder="Find a bot, pack, model, or ID"></label>
+<label>Evaluation outcome<select name="outcome" aria-label="Evaluation outcome">{% for value, label in [('all','All outcomes'),('passed','All cases passed'),('failed','Has failed cases')] %}<option value="{{ value }}" {% if outcome == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+<button class="button" type="submit">Search history</button><a class="button ghost" href="/evals/history">Clear history filters</a></div></form>
+<section class="panel"><p class="hint">{{ total }} matching evaluation{{ '' if total == 1 else 's' }} · Page {{ page }}. Search applies before pagination.</p>
+<div class="eval-history-scroll"><table class="eval-history-table" aria-label="Saved evaluations"><thead><tr><th>When / evaluation</th><th>Bot / pack</th><th>Provider / model</th><th>Passed</th><th>Report</th></tr></thead><tbody>
+{% for item in evals %}<tr><td><a href="/evals?id={{ item.id|urlencode }}">{{ item.created_at }}</a><small class="label">{{ item.id }}</small></td><td>{{ bot_names.get(item.bot_id,item.bot_id) }}<small class="label">{{ item.pack_id }}</small></td><td>{{ item.provider }}<small class="label">{{ item.model }}</small></td><td><span class="pill {{ 'pass' if item.case_count > 0 and item.pass_count == item.case_count else 'fail' }}">{{ item.pass_count }}/{{ item.case_count }}</span></td><td><a href="/api/evals/{{ item.id|urlencode }}/export">Download</a></td></tr>{% endfor %}
+</tbody></table></div>
+{% if not evals %}<p class="empty">No evaluations match these filters.</p>{% endif %}
+<nav class="row-actions" aria-label="Evaluation history pages">{% if page > 1 %}<a class="button ghost" href="{{ request.url.include_query_params(page=page-1) }}">Newer evaluations</a>{% endif %}{% if has_next %}<a class="button ghost" href="{{ request.url.include_query_params(page=page+1) }}">Older evaluations</a>{% endif %}</nav>
+</section>
+{% endblock %}

@@ -7,7 +7,7 @@ from dataclasses import asdict
 
 from urllib.parse import quote
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Request, Query
 from fastapi.responses import RedirectResponse, JSONResponse, Response
 
 from decision_bench.documents import extract_document
@@ -329,6 +329,15 @@ def register_routes(app: FastAPI) -> None:
             error=request.query_params.get("error"),
             bot_names=bot_name_map(state),
         )
+
+    @app.get("/evals/history")
+    def evaluation_history(request: Request, q: str = Query("", max_length=120),
+                           outcome: str = Query("all", pattern="^(all|passed|failed)$"),
+                           page: int = Query(1, ge=1, le=100000)):
+        state = work(request.app)
+        rows, total = state.repo.search_evals(q=q, outcome=outcome, offset=(page - 1) * 20)
+        return render(request, "eval_history.html", active="evals", evals=rows, total=total,
+                      has_next=page*20 < total, q=q, outcome=outcome, page=page, bot_names=bot_name_map(state))
 
     @app.post("/evals")
     async def create_eval_page(request: Request):
