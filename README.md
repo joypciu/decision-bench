@@ -1,5 +1,10 @@
 # Decision Bench
 
+**Review edited case** on a saved run opens its input, bot, provider, and model
+in an editable draft. Submitting creates a fresh run using the bot's current
+version and preserves the original. Use it to review a fix and compare the two
+decisions. The run form also accepts an optional model override.
+
 Open **Compare** to compare two saved runs side by side: decisions, bot versions,
 providers/models, scores, lead-run token usage and timing, plus specialist results.
 Changed values are highlighted. Different case inputs and same-run selections

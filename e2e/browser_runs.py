@@ -71,9 +71,23 @@ try:
         page.goto(base)
         page.get_by_label("Search recent runs").fill("no-matches")
         expect(page.locator("#no-run-matches")).to_be_visible()
+        page.goto(base + "/runs/" + ids[1])
+        page.get_by_role("link", name="Review edited case", exact=True).click()
+        expect(page.get_by_text("Editing a copy", exact=False)).to_be_visible()
+        expect(page.locator('textarea[name="input"]')).to_contain_text("bypass auth")
+        expect(page.locator('select[name="bot_id"]')).to_have_value("change-lead")
+        expect(page.locator('select[name="provider"]')).to_have_value("demo")
+        expect(page.locator('input[name="model"]')).to_have_value("demo")
+        page.locator('textarea[name="input"]').fill("Update README documentation.")
+        page.get_by_role("button", name="Review", exact=True).click()
+        expect(page.locator("h1.decision")).to_have_text("ship", timeout=30000)
+        assert page.url.rsplit("/", 1)[1] not in ids
+        original = page.request.get(base + "/api/runs/" + ids[1]).json()["run"]
+        assert original["output"]["verdict"] == "block"
+        assert "bypass auth" in original["input_text"]
         assert not errors, errors
         browser.close()
-    print("PASS: empty comparison, two UI reviews, changed decisions, case warning, specialists, export action/payload, reload, mobile theme, same-run warning, search; no browser exceptions")
+    print("PASS: edited-case prefill/new decision/original preservation, empty comparison, two UI reviews, changed decisions, case warning, specialists, export action/payload, reload, mobile theme, same-run warning, search; no browser exceptions")
 finally:
     process.terminate()
     try:

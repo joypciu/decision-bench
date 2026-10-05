@@ -8,6 +8,7 @@
     <p class="lede">Paste a diff or an incident. A lead bot sends it to the specialist checkers and returns one decision.</p>
   </div>
 </header>
+{% if draft %}<p class="banner">Editing a copy of <a href="/runs/{{ draft.run.id }}">run {{ draft.run.id[:8] }}</a>. Submitting creates a new run using the bot's current version; the original run is preserved.{% if draft_provider != draft.run.provider %} The original provider is unavailable. Choose a provider before reviewing.{% endif %}</p>{% endif %}
 <div class="starter-row" role="group" aria-label="Sample cases">
   <span class="label">Start with a sample</span>
   <button class="button ghost" type="button" data-case="security">Security review ↗</button>
@@ -17,14 +18,14 @@
 <form class="panel form start-form" method="post" action="/runs">
   <label class="wide">
     <span>Case</span>
-    <textarea name="input" rows="8" required placeholder="Paste a pull request diff or an incident report"></textarea>
+    <textarea name="input" rows="8" required placeholder="Paste a pull request diff or an incident report">{{ draft.run.input_text if draft else '' }}</textarea>
   </label>
   <div class="split three">
     <label>
       <span>Bot</span>
       <select name="bot_id">
         {% for bot in bots %}
-        <option value="{{ bot.id }}" {% if bot.id == 'change-lead' %}selected{% endif %}>{{ bot.name }}</option>
+        <option value="{{ bot.id }}" {% if bot.id == (draft.run.bot_id if draft else 'change-lead') %}selected{% endif %}>{{ bot.name }}</option>
         {% endfor %}
       </select>
     </label>
@@ -32,7 +33,7 @@
       <span>Provider</span>
       <select name="provider">
         {% for provider in chat_provider_rows %}
-        <option value="{{ provider.name }}" {% if provider.name == 'demo' %}selected{% endif %}>{{ provider.name }}{% if not provider.configured %} — needs a key{% endif %}</option>
+        <option value="{{ provider.name }}" {% if provider.name == draft_provider %}selected{% endif %}>{{ provider.name }}{% if not provider.configured %} — needs a key{% endif %}</option>
         {% endfor %}
       </select>
     </label>
@@ -40,6 +41,7 @@
       <button class="button" type="submit">Review</button>
     </div>
   </div>
+  <label><span>Model (optional)</span><input name="model" value="{{ draft.run.model if draft and draft_provider == draft.run.provider else '' }}" placeholder="Use this bot's default model"></label>
   <p class="hint">Demo answers on this machine. A live provider needs a key in Settings and available quota.</p>
 </form>
 <section class="grid stats">

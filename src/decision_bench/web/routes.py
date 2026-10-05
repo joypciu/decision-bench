@@ -106,8 +106,13 @@ def register_routes(app: FastAPI) -> None:
         return asdict(result)
 
     @app.get("/")
-    def dashboard(request: Request):
+    def dashboard(request: Request, from_run: str = ""):
         state = work(request.app)
+        draft = run_tree(state, from_run) if from_run else None
+        if from_run and draft is None:
+            raise HTTPException(404, "Run not found.")
+        rows = provider_rows(state)
+        available = {row["name"] for row in rows if row.get("kind") in {"demo", "gemini", "openai", "custom"}}
         return render(
             request,
             "dashboard.html",
@@ -115,6 +120,8 @@ def register_routes(app: FastAPI) -> None:
             runs=state.repo.list_root_runs(100),
             evals=state.repo.list_evals(5),
             bot_names=bot_name_map(state),
+            draft=draft,
+            draft_provider=draft.run.provider if draft and draft.run.provider in available else "demo",
         )
 
     @app.get("/bots")
