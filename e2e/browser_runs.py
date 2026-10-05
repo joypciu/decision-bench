@@ -101,6 +101,26 @@ try:
         page.get_by_label("Candidate evaluation").select_option(evaluation_ids[1])
         page.get_by_role("button", name="Compare evaluations", exact=True).click()
         expect(page.locator('tr[data-case-state="unchanged"]')).to_have_count(2)
+        page.get_by_label("Search cases", exact=True).fill("AUTH-BYPASS")
+        expect(page.locator('tr[data-case-state]:visible')).to_have_count(1)
+        page.get_by_label("Case change", exact=True).select_option("regressed")
+        expect(page.get_by_text("No cases match these filters.", exact=True)).to_be_visible()
+        page.get_by_label("Case change", exact=True).select_option("unchanged")
+        expect(page.locator('tr[data-case-state]:visible')).to_have_count(1)
+        page.reload()
+        expect(page.get_by_label("Search cases", exact=True)).to_have_value("AUTH-BYPASS")
+        expect(page.get_by_label("Case change", exact=True)).to_have_value("unchanged")
+        expect(page.locator('tr[data-case-state]:visible')).to_have_count(1)
+        with page.expect_download() as comparison_download:
+            page.get_by_role("link", name="Export all cases CSV", exact=True).click()
+        assert comparison_download.value.failure() is None
+        import csv, io
+        csv_response = page.request.get(comparison_download.value.url)
+        comparison_rows = list(csv.DictReader(io.StringIO(csv_response.text().lstrip("\ufeff"))))
+        assert len(comparison_rows) == 2
+        assert all(row["change"] == "unchanged" for row in comparison_rows)
+        page.get_by_role("button", name="Clear case filters", exact=True).click()
+        expect(page.locator('tr[data-case-state]:visible')).to_have_count(2)
         with page.expect_download() as download:
             page.get_by_role("link", name="Download candidate", exact=True).click()
         assert download.value.failure() is None
@@ -111,6 +131,10 @@ try:
         page.reload()
         expect(page.get_by_label("Candidate evaluation")).to_have_value(evaluation_ids[1])
         page.set_viewport_size({"width": 390, "height": 844})
+        page.get_by_label("Search cases", exact=True).fill("README")
+        expect(page.locator('tr[data-case-state]:visible')).to_have_count(1)
+        page.get_by_role("button", name="Clear case filters", exact=True).click()
+        expect(page.locator('tr[data-case-state]:visible')).to_have_count(2)
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
         if os.environ.get("BENCH_EVAL_SCREENSHOT"):
             page.screenshot(path=os.environ["BENCH_EVAL_SCREENSHOT"], full_page=True)
@@ -118,7 +142,7 @@ try:
         expect(page.get_by_role("link", name="Download report", exact=False)).to_be_visible()
         assert not errors, errors
         browser.close()
-    print("PASS: gold-set creation/evaluation comparison/report/fingerprints/run links/mobile, edited-case prefill/new decision/original preservation, run comparison, warnings, specialists, exports, reload, theme, search; no browser exceptions")
+    print("PASS: case search/state/no matches/clear/reload/mobile/full CSV while filtered, gold-set creation/evaluation comparison/report/fingerprints/run links/mobile, edited-case prefill/new decision/original preservation, run comparison, warnings, specialists, exports, reload, theme, search; no browser exceptions")
 finally:
     process.terminate()
     try:

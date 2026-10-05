@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+import csv
+import io
 from dataclasses import asdict
 
 from urllib.parse import quote
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
-from fastapi.responses import RedirectResponse, JSONResponse
+from fastapi.responses import RedirectResponse, JSONResponse, Response
 
 from decision_bench.documents import extract_document
 from decision_bench.domain import BotVersion
@@ -120,6 +122,31 @@ def register_routes(app: FastAPI) -> None:
             raise HTTPException(404, "Evaluation not found.")
         return JSONResponse({"format_version": 1, "evaluation": asdict(evaluation)},
                             headers={"Content-Disposition": f'attachment; filename="evaluation-{evaluation.id}.json"'})
+
+    @app.get("/api/evaluation-comparison.csv")
+    def export_eval_comparison(left: str, right: str):
+        state = work(app)
+        first, second = state.repo.get_eval(left), state.repo.get_eval(right)
+        if first is None or second is None:
+            raise HTTPException(404, "Evaluation not found.")
+        output = io.StringIO(newline="")
+        writer = csv.writer(output)
+        writer.writerow(["baseline_evaluation", "candidate_evaluation", "case_id", "title", "change",
+                         "baseline_passed", "candidate_passed", "baseline_score", "candidate_score",
+                         "baseline_tokens", "candidate_tokens", "baseline_run", "candidate_run"])
+        def cell(value):
+            if value is None:
+                return ""
+            if isinstance(value, str) and (value.startswith(("\t", "\r", "\n")) or value.lstrip().startswith(("=", "+", "-", "@"))):
+                return "'" + value
+            return value
+        for row in compare_evaluations(first, second)["rows"]:
+            before, after = row["before"] or {}, row["after"] or {}
+            writer.writerow([cell(value) for value in [first.id, second.id, row["case_id"], row["title"], row["state"],
+                before.get("passed"), after.get("passed"), before.get("score"), after.get("score"),
+                before.get("tokens"), after.get("tokens"), before.get("run_id"), after.get("run_id")]])
+        return Response("\ufeff" + output.getvalue(), media_type="text/csv", headers={
+            "Content-Disposition": 'attachment; filename="evaluation-comparison.csv"', "Cache-Control": "no-store"})
 
     @app.get("/evals/compare")
     def compare_evals(request: Request, left: str = "", right: str = ""):

@@ -2,6 +2,38 @@ const data = document.getElementById("pack-data");
 const select = document.getElementById("pack-select");
 const schema = document.getElementById("schema");
 
+const caseSearch = document.getElementById("eval-case-search");
+const caseState = document.getElementById("eval-case-state");
+if (caseSearch && caseState) {
+  const saved = new URLSearchParams(location.search);
+  caseSearch.value = saved.get("case_q") || "";
+  const state = saved.get("case_state") || "all";
+  caseState.value = [...caseState.options].some(option => option.value === state) ? state : "all";
+  function filterCases(updateUrl = true) {
+    const query = caseSearch.value.trim().toLowerCase();
+    const rows = [...document.querySelectorAll("tr[data-case-state]")];
+    let count = 0;
+    rows.forEach(row => {
+      row.hidden = !row.cells[0].textContent.toLowerCase().includes(query) || (caseState.value !== "all" && row.dataset.caseState !== caseState.value);
+      if (!row.hidden) count++;
+    });
+    document.getElementById("eval-case-count").textContent = `${count} of ${rows.length} cases shown. CSV exports all cases.`;
+    document.getElementById("no-case-matches").hidden = count > 0;
+    if (updateUrl) {
+      const url = new URL(location.href);
+      if (query) url.searchParams.set("case_q", caseSearch.value); else url.searchParams.delete("case_q");
+      if (caseState.value !== "all") url.searchParams.set("case_state", caseState.value); else url.searchParams.delete("case_state");
+      history.replaceState(null, "", url);
+    }
+  }
+  caseSearch.addEventListener("input", () => filterCases());
+  caseState.addEventListener("change", () => filterCases());
+  document.getElementById("clear-case-filters").addEventListener("click", () => {
+    caseSearch.value = ""; caseState.value = "all"; filterCases(); caseSearch.focus();
+  });
+  filterCases(false);
+}
+
 const samples = {
   security: {bot:"change-lead",text:"diff --git a/auth.py b/auth.py\n--- a/auth.py\n+++ b/auth.py\n@@ -1,2 +1,2 @@\n-    if user.is_authenticated:\n+    if True:  # bypass auth\n         return True"},
   safe: {bot:"change-lead",text:"diff --git a/README.md b/README.md\n--- a/README.md\n+++ b/README.md\n@@ -1 +1 @@\n-Run the application.\n+Run the application with python -m app."},

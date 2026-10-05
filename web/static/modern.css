@@ -444,3 +444,5 @@ button:focus-visible {
 .eval-case-scroll { overflow-x: auto; max-width: 100%; }
 .eval-case-table { width: 100%; min-width: 520px; }
 .eval-case-table small { display: block; margin-top: 4px; }
+.eval-case-filters { align-items: end; margin-top: 16px; }
+.eval-case-filters label { flex: 1 1 200px; min-width: 0; }

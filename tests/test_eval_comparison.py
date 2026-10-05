@@ -1,4 +1,6 @@
 from dataclasses import replace
+import csv
+import io
 
 from fastapi.testclient import TestClient
 
@@ -28,6 +30,14 @@ def test_eval_report_and_comparison_routes(app):
         assert client.get("/api/evals/missing/export").status_code == 404
         assert client.get("/api/evals/missing").status_code == 404
         assert "Choose two saved evaluations" in client.get("/evals/compare").text
+        exported = client.get("/api/evaluation-comparison.csv", params={"left": saved["id"], "right": saved["id"]})
+        assert exported.status_code == 200
+        rows = list(csv.DictReader(io.StringIO(exported.text.lstrip("\ufeff"))))
+        assert len(rows) == saved["case_count"]
+        assert all(row["change"] == "unchanged" for row in rows)
+        assert rows[0]["baseline_run"] == saved["results"][0]["run_id"]
+        assert "attachment" in exported.headers["content-disposition"]
+        assert client.get("/api/evaluation-comparison.csv?left=missing&right=missing").status_code == 404
 
 
 def test_comparison_excludes_changed_missing_and_duplicate_context(app):
@@ -72,3 +82,19 @@ def test_evaluation_pins_lead_version_when_bot_changes_mid_run(app, monkeypatch)
     assert state.repo.latest_version("change-lead").id != initial.id
     assert result.bot_version_id == initial.id
     assert all(run.bot_version_id == initial.id for run in calls)
+
+
+def test_comparison_csv_keeps_changed_states_and_escapes_formula_titles(app, monkeypatch):
+    with TestClient(app) as client:
+        saved = evaluation(client)
+        original = app.state.work.repo.get_eval(saved["id"])
+        row = {**original.results[0], "title": '=SUM(1,2), "বাংলা"'}
+        first = replace(original, id="baseline", results=[row])
+        second = replace(original, id="candidate", results=[{**row, "case_fingerprint": "changed"}])
+        monkeypatch.setattr(app.state.work.repo, "get_eval", lambda identity: {"baseline": first, "candidate": second}.get(identity))
+        response = client.get("/api/evaluation-comparison.csv?left=baseline&right=candidate")
+        rows = list(csv.DictReader(io.StringIO(response.text.lstrip("\ufeff"))))
+        assert rows[0]["title"] == '\'=SUM(1,2), "বাংলা"'
+        assert rows[0]["change"] == "case_changed"
+        assert rows[0]["baseline_evaluation"] == "baseline"
+        assert rows[0]["candidate_evaluation"] == "candidate"

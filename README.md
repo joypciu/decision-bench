@@ -7,6 +7,11 @@ duplicate IDs, and older evaluations without fingerprints are excluded from
 regression/improvement classification. Lead bot versions are pinned for each
 evaluation so a mid-run edit cannot mix lead versions. Evaluation reports can
 be downloaded as JSON from the Evals page or comparison screen.
+Case comparison supports title/ID search and change-status filters, retained in
+the URL across reloads. **Export all cases CSV** includes every compared case,
+regardless of visible filters, with outcomes, scores, token counts, and run IDs.
+CSV preserves Unicode and guards potential spreadsheet formulas in text cells.
+`GET /api/evaluation-comparison.csv?left={id}&right={id}` downloads the comparison.
 `GET /api/evals/{id}` returns a stored evaluation; `/export` downloads its report.
 
 **Review edited case** on a saved run opens its input, bot, provider, and model
