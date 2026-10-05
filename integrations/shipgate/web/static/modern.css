@@ -140,3 +140,9 @@ a:focus-visible {
     padding: 18px;
   }
 }
+.saved-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+.saved-actions a { text-decoration: none; border: 1px solid var(--line); border-radius: 10px; padding: 9px 14px; }
+.recent, .recent li { min-width: 0; }
+.recent li { flex-wrap: wrap; }
+.recent li .quiet { flex-basis: 100%; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+.recent a { color: var(--ink); text-underline-offset: 3px; }

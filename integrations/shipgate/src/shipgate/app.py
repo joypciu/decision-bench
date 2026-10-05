@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import os
+from dataclasses import asdict
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import httpx
@@ -12,7 +14,7 @@ from shipgate.app_auth import AppCredentials
 from shipgate.comment import format_comment, review_event, status_for
 from shipgate.diffmap import diff_stats, inline_comments
 from shipgate.github import GitHub
-from shipgate.review import Reviewer
+from shipgate.review import Reviewer, Review, Risk
 from shipgate.paths import bench_root as find_bench_root
 from shipgate.store import DeliveryStore
 from shipgate.webhook import WebhookError, handle_webhook
@@ -97,7 +99,8 @@ def create_app() -> FastAPI:
                 page_context(request, review=None, diff=diff, error=str(exc), bot_id=bot_id, recent=app.state.store.recent_local()),
                 status_code=400,
             )
-        app.state.store.add_local(bot_id, review.verdict, review.summary)
+        review_id = app.state.store.add_local(bot_id, review.verdict, review.summary,
+                                             payload={"review": asdict(review), "diff": diff, "bot_id": bot_id})
         github_event = review_event(review.verdict) if review.verdict in {"ship", "revise", "block"} else ""
         commit_state = status_for(review)[0] if github_event else ""
         return templates.TemplateResponse(
@@ -106,6 +109,7 @@ def create_app() -> FastAPI:
             page_context(
                 request,
                 review=review,
+                review_id=review_id,
                 diff=diff,
                 error=None,
                 comment=format_comment(review),
@@ -117,6 +121,30 @@ def create_app() -> FastAPI:
                 recent=app.state.store.recent_local(),
             ),
         )
+
+    @app.get("/reviews/{review_id}")
+    def saved_review(request: Request, review_id: int):
+        saved = app.state.store.get_local(review_id)
+        if saved is None:
+            raise HTTPException(404, "Saved review not found. Older summary-only reviews cannot be reopened.")
+        values = dict(saved["review"])
+        values["risks"] = [Risk(**risk) for risk in values["risks"]]
+        review = Review(**values)
+        diff = saved["diff"]
+        event = review_event(review.verdict) if review.verdict in {"ship", "revise", "block"} else ""
+        return templates.TemplateResponse(request, "home.html", page_context(
+            request, review=review, review_id=review_id, diff=diff, error=None,
+            bot_id=saved["bot_id"], comment=format_comment(review), lines=inline_comments(review, diff),
+            stats=diff_stats(diff), github_event=event, commit_state=status_for(review)[0] if event else "",
+            recent=app.state.store.recent_local()))
+
+    @app.get("/reviews/{review_id}/export")
+    def export_review(review_id: int):
+        saved = app.state.store.get_local(review_id)
+        if saved is None:
+            raise HTTPException(404, "Saved review not found.")
+        return JSONResponse({"format_version": 1, **saved},
+                            headers={"Content-Disposition": f'attachment; filename="shipgate-review-{review_id}.json"'})
 
     @app.get("/health")
     def health() -> dict:

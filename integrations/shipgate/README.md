@@ -1,5 +1,17 @@
 # Shipgate
 
+Local reviews now have saved links and JSON downloads. Open a full review from
+**Recent reviews**, bookmark its URL, or download its verdict, risks, run ID, and
+original diff. Saved reviews survive server restarts and reopening does not rerun
+inference. Existing summary-only history is retained and marked **Summary only**.
+The local dashboard and saved-review routes use the same access model; use your
+deployment's access controls when sharing this service beyond your machine.
+
+Run `python e2e/shipgate_browser.py` from the parent Decision Bench checkout after
+installing both projects and Playwright Chromium. It checks user review flows,
+exports, recent links, mobile layout, and persistence through a real server restart
+with synthetic diffs and the demo provider. GitHub CI runs this browser test.
+
 This integration is now maintained inside **Decision Bench**, with its full
 history retained. From the Decision Bench root, install with
 `pip install -e ".[dev]" -e "integrations/shipgate[dev]"`, then run

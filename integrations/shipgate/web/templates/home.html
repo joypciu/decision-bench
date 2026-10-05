@@ -10,6 +10,7 @@
 </section>
 {% if error %}<p class="banner">{{ error }}</p>{% endif %}
 {% if review %}
+{% if review_id %}<div class="saved-actions"><a class="ghost" href="/reviews/{{ review_id }}">Saved review #{{ review_id }}</a><a class="ghost" href="/reviews/{{ review_id }}/export">Download review</a></div>{% endif %}
 <section class="verdict verdict-{{ review.verdict }}">
   <div>
     <p class="eyebrow">Verdict</p>
@@ -79,7 +80,7 @@
   <h2>Recent reviews</h2>
   <ul class="recent">
     {% for item in recent %}
-    <li><strong>{{ item.verdict }}</strong> <span>{{ jobs.get(item.bot_id, item.bot_id) }}</span> <span class="quiet">{{ item.summary }}</span></li>
+    <li>{% if item.available %}<a href="/reviews/{{ item.id }}"><strong>{{ item.verdict }}</strong> · Open review #{{ item.id }}</a>{% else %}<strong>{{ item.verdict }}</strong><span class="quiet">Summary only</span>{% endif %} <span>{{ jobs.get(item.bot_id, item.bot_id) }}</span> <span class="quiet">{{ item.summary }}</span></li>
     {% endfor %}
   </ul>
 </section>

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+import json
 from pathlib import Path
 
 
@@ -32,6 +33,9 @@ class DeliveryStore:
                 )
                 """
             )
+            columns = {row[1] for row in connection.execute("PRAGMA table_info(local_reviews)")}
+            if "payload" not in columns:
+                connection.execute("ALTER TABLE local_reviews ADD COLUMN payload TEXT")
 
     def seen(self, repo: str, sha: str) -> bool:
         with self._conn() as connection:
@@ -48,17 +52,23 @@ class DeliveryStore:
                 (repo, sha, run_id, comment_id),
             )
 
-    def add_local(self, bot_id: str, verdict: str, summary: str) -> None:
+    def add_local(self, bot_id: str, verdict: str, summary: str, *, payload: dict | None = None) -> int:
         with self._conn() as connection:
-            connection.execute(
-                "INSERT INTO local_reviews (bot_id, verdict, summary) VALUES (?, ?, ?)",
-                (bot_id, verdict, summary[:180]),
+            cursor = connection.execute(
+                "INSERT INTO local_reviews (bot_id, verdict, summary, payload) VALUES (?, ?, ?, ?)",
+                (bot_id, verdict, summary[:180], json.dumps(payload) if payload is not None else None),
             )
+            return cursor.lastrowid
+
+    def get_local(self, review_id: int) -> dict | None:
+        with self._conn() as connection:
+            row = connection.execute("SELECT payload FROM local_reviews WHERE id = ?", (review_id,)).fetchone()
+        return json.loads(row["payload"]) if row and row["payload"] else None
 
     def recent_local(self, limit: int = 8) -> list[dict]:
         with self._conn() as connection:
             rows = connection.execute(
-                "SELECT bot_id, verdict, summary, created_at FROM local_reviews ORDER BY id DESC LIMIT ?",
+                "SELECT id, bot_id, verdict, summary, created_at, payload IS NOT NULL AS available FROM local_reviews ORDER BY id DESC LIMIT ?",
                 (limit,),
             ).fetchall()
         return [dict(row) for row in rows]
