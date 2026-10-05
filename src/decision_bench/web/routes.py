@@ -10,6 +10,7 @@ from fastapi.responses import RedirectResponse, JSONResponse
 
 from decision_bench.documents import extract_document
 from decision_bench.domain import BotVersion
+from decision_bench.eval_compare import compare_evaluations
 from decision_bench.present import decision_of, summary_of
 from decision_bench.provider_admin import public_provider, remove_provider, save_provider
 from decision_bench.services import (
@@ -104,6 +105,34 @@ def register_routes(app: FastAPI) -> None:
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         return asdict(result)
+
+    @app.get("/api/evals/{eval_id}")
+    def get_evaluation(eval_id: str):
+        evaluation = work(app).repo.get_eval(eval_id)
+        if evaluation is None:
+            raise HTTPException(404, "Evaluation not found.")
+        return asdict(evaluation)
+
+    @app.get("/api/evals/{eval_id}/export")
+    def export_evaluation(eval_id: str):
+        evaluation = work(app).repo.get_eval(eval_id)
+        if evaluation is None:
+            raise HTTPException(404, "Evaluation not found.")
+        return JSONResponse({"format_version": 1, "evaluation": asdict(evaluation)},
+                            headers={"Content-Disposition": f'attachment; filename="evaluation-{evaluation.id}.json"'})
+
+    @app.get("/evals/compare")
+    def compare_evals(request: Request, left: str = "", right: str = ""):
+        state = work(request.app)
+        selected = []
+        for eval_id in (left, right):
+            item = state.repo.get_eval(eval_id) if eval_id else None
+            if eval_id and item is None:
+                raise HTTPException(404, "Evaluation not found.")
+            selected.append(item)
+        comparison = compare_evaluations(*selected) if all(selected) else None
+        return render(request, "eval_compare.html", active="evals", evals=state.repo.list_evals(100),
+                      left=left, right=right, selected=selected, comparison=comparison, bot_names=bot_name_map(state))
 
     @app.get("/")
     def dashboard(request: Request, from_run: str = ""):

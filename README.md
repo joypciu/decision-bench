@@ -1,5 +1,14 @@
 # Decision Bench
 
+**Evals → Compare evaluations** compares saved gold-set results case by case,
+showing improved/regressed outcomes and links to each underlying run. New evaluations
+fingerprint case inputs and scoring criteria; changed cases, different packs,
+duplicate IDs, and older evaluations without fingerprints are excluded from
+regression/improvement classification. Lead bot versions are pinned for each
+evaluation so a mid-run edit cannot mix lead versions. Evaluation reports can
+be downloaded as JSON from the Evals page or comparison screen.
+`GET /api/evals/{id}` returns a stored evaluation; `/export` downloads its report.
+
 **Review edited case** on a saved run opens its input, bot, provider, and model
 in an editable draft. Submitting creates a fresh run using the bot's current
 version and preserves the original. Use it to review a fix and compare the two

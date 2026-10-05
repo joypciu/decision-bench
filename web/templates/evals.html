@@ -5,8 +5,10 @@
   <div>
     <p class="eyebrow">Evals</p>
     <h1>Evals</h1>
+    <p class="lede">Run a gold set, compare case outcomes, and keep a report.</p>
   </div>
 </header>
+<div class="row-actions"><a class="button ghost" href="/evals/compare{% if selected %}?left={{ selected.id }}{% endif %}">Compare evaluations</a>{% if selected %}<a class="button ghost" href="/api/evals/{{ selected.id }}/export">Download evaluation</a>{% endif %}</div>
 {% if error %}<p class="banner">{{ error }}</p>{% endif %}
 <form class="panel form" method="post" action="/evals">
   <div class="split three">

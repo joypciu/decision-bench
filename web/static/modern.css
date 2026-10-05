@@ -441,3 +441,6 @@ button:focus-visible {
 .comparison table { table-layout: fixed; width: 100%; }
 .comparison td, .comparison th { overflow-wrap: anywhere; }
 .comparison-detail pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.eval-case-scroll { overflow-x: auto; max-width: 100%; }
+.eval-case-table { width: 100%; min-width: 520px; }
+.eval-case-table small { display: block; margin-top: 4px; }

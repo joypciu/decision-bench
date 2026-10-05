@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Compare evaluations · Decision Bench{% endblock %}
+{% block content %}
+<header class="page-head"><div><p class="eyebrow">EVALUATION COMPARISON</p><h1>Catch the cases that changed.</h1><p class="lede">Compare saved gold-set results case by case, with links to the underlying runs.</p></div><a class="button ghost" href="/evals">Run a gold set</a></header>
+<form class="panel form" method="get" action="/evals/compare"><div class="split three">
+{% for label, field, chosen in [('Baseline evaluation', 'left', left), ('Candidate evaluation', 'right', right)] %}
+<label><span>{{ label }}</span><select aria-label="{{ label }}" name="{{ field }}" required><option value="">Choose an evaluation</option>
+{% for item in evals %}<option value="{{ item.id }}" {% if item.id == chosen %}selected{% endif %}>{{ bot_names.get(item.bot_id, item.bot_id) }} · {{ item.pack_id }} · {{ item.pass_count }}/{{ item.case_count }} · {{ item.id[:8] }}</option>{% endfor %}
+{% if chosen and chosen not in evals | map(attribute='id') | list %}<option value="{{ chosen }}" selected>{{ chosen }}</option>{% endif %}
+</select></label>{% endfor %}<div class="start-submit"><button class="button" type="submit">Compare evaluations</button></div>
+</div></form>
+{% if comparison %}
+{% set first = selected[0] %}{% set second = selected[1] %}
+{% if first.id == second.id %}<p class="banner">You selected the same evaluation twice. Choose another candidate to find changes.</p>{% endif %}
+{% if first.pack_id != second.pack_id %}<p class="banner">These evaluations use different packs. Outcomes are listed, but improvements and regressions are not classified across packs.</p>{% endif %}
+{% if comparison.counts.get('unknown_context', 0) %}<p class="banner">Older evaluations have no case fingerprints. Their outcomes remain visible, but scoring context cannot be verified.</p>{% endif %}
+{% if comparison.counts.get('case_changed', 0) %}<p class="banner">Case input, expected output, schema, or minimum specialist count changed. These cases are excluded from improvement/regression counts.</p>{% endif %}
+<section class="grid stats"><article><p class="label">Comparable cases</p><strong>{{ comparison.comparable }}</strong></article><article><p class="label">Improved</p><strong>{{ comparison.counts.get('improved', 0) }}</strong></article><article><p class="label">Regressed</p><strong>{{ comparison.counts.get('regressed', 0) }}</strong></article></section>
+<section class="panel comparison"><h2>Evaluation totals</h2><table><thead><tr><th>Measure</th><th>Baseline</th><th>Candidate</th></tr></thead><tbody>
+{% for label, a, b in [('Bot', bot_names.get(first.bot_id, first.bot_id), bot_names.get(second.bot_id, second.bot_id)),('Bot version', first.bot_version_id, second.bot_version_id),('Pack', first.pack_id, second.pack_id),('Provider', first.provider, second.provider),('Model', first.model, second.model),('Cases passed', first.pass_count|string ~ '/' ~ first.case_count|string, second.pass_count|string ~ '/' ~ second.case_count|string),('Lead tokens', first.total_tokens, second.total_tokens),('Average lead latency (ms)', first.avg_latency_ms, second.avg_latency_ms)] %}<tr {% if a != b %}class="comparison-changed"{% endif %}><th scope="row">{{ label }}</th><td>{{ a }}</td><td>{{ b }}</td></tr>{% endfor %}
+</tbody></table><p class="hint">Totals include each evaluation's own case set; changed or added cases can affect totals. Specialist usage appears in the underlying run reports.</p>
+<div class="row-actions"><a class="button ghost" href="/api/evals/{{ first.id }}/export">Download baseline</a><a class="button ghost" href="/api/evals/{{ second.id }}/export">Download candidate</a></div></section>
+<section class="panel"><h2>Case outcomes</h2><div class="eval-case-scroll"><table class="eval-case-table"><thead><tr><th>Case</th><th>Baseline</th><th>Candidate</th><th>Change</th></tr></thead><tbody>
+{% set labels = {'regressed':'Regressed', 'improved':'Improved', 'unchanged':'Unchanged', 'added':'Added', 'removed':'Removed', 'case_changed':'Case changed', 'unknown_context':'Context unavailable', 'different_pack':'Different packs', 'ambiguous':'Duplicate case IDs'} %}
+{% for row in comparison.rows %}<tr data-case-state="{{ row.state }}"><td>{{ row.title }}<small class="label">{{ row.case_id }}</small></td>{% for item in [row.before, row.after] %}<td>{% if item %}<a href="/runs/{{ item.run_id }}">{{ 'Passed' if item.passed else 'Failed' }}</a><small class="label">score {{ item.score }} · {{ item.tokens }} tokens</small>{% else %}—{% endif %}</td>{% endfor %}<td><span class="pill {{ 'fail' if row.state == 'regressed' else 'pass' if row.state == 'improved' else '' }}">{{ labels[row.state] }}</span></td></tr>{% endfor %}
+</tbody></table></div><p class="hint">Only cases with matching saved input and scoring fingerprints in the same pack are classified as improved or regressed. Duplicate case IDs are not comparable.</p></section>
+{% else %}<p class="empty">Choose two saved evaluations. Run a gold set on the Evals page to create one.</p>{% endif %}
+{% endblock %}

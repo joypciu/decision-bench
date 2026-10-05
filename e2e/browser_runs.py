@@ -85,9 +85,40 @@ try:
         original = page.request.get(base + "/api/runs/" + ids[1]).json()["run"]
         assert original["output"]["verdict"] == "block"
         assert "bypass auth" in original["input_text"]
+        page.set_viewport_size({"width": 1440, "height": 1000})
+        evaluation_ids = []
+        for _ in range(2):
+            page.goto(base + "/evals")
+            page.locator('select[name="bot_id"]').select_option("change-lead")
+            page.locator('select[name="pack_id"]').select_option("change_risk")
+            page.locator('select[name="provider"]').select_option("demo")
+            page.get_by_role("button", name="Run gold set", exact=True).click()
+            expect(page.get_by_role("link", name="Download evaluation", exact=True)).to_be_visible(timeout=30000)
+            evaluation_ids.append(page.url.split("id=", 1)[1])
+        page.get_by_role("link", name="Compare evaluations", exact=True).click()
+        expect(page.get_by_label("Baseline evaluation")).to_have_value(evaluation_ids[1])
+        page.get_by_label("Baseline evaluation").select_option(evaluation_ids[0])
+        page.get_by_label("Candidate evaluation").select_option(evaluation_ids[1])
+        page.get_by_role("button", name="Compare evaluations", exact=True).click()
+        expect(page.locator('tr[data-case-state="unchanged"]')).to_have_count(2)
+        with page.expect_download() as download:
+            page.get_by_role("link", name="Download candidate", exact=True).click()
+        assert download.value.failure() is None
+        report = page.request.get(download.value.url).json()["evaluation"]
+        assert report["id"] == evaluation_ids[1]
+        assert report["pass_count"] == report["case_count"] == 2
+        assert all(len(item["case_fingerprint"]) == 64 for item in report["results"])
+        page.reload()
+        expect(page.get_by_label("Candidate evaluation")).to_have_value(evaluation_ids[1])
+        page.set_viewport_size({"width": 390, "height": 844})
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+        if os.environ.get("BENCH_EVAL_SCREENSHOT"):
+            page.screenshot(path=os.environ["BENCH_EVAL_SCREENSHOT"], full_page=True)
+        page.locator('tr[data-case-state="unchanged"] a').first.click()
+        expect(page.get_by_role("link", name="Download report", exact=False)).to_be_visible()
         assert not errors, errors
         browser.close()
-    print("PASS: edited-case prefill/new decision/original preservation, empty comparison, two UI reviews, changed decisions, case warning, specialists, export action/payload, reload, mobile theme, same-run warning, search; no browser exceptions")
+    print("PASS: gold-set creation/evaluation comparison/report/fingerprints/run links/mobile, edited-case prefill/new decision/original preservation, run comparison, warnings, specialists, exports, reload, theme, search; no browser exceptions")
 finally:
     process.terminate()
     try:

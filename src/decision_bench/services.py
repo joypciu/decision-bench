@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import uuid
 from dataclasses import dataclass
 from typing import Any
@@ -189,9 +190,10 @@ def open_run(
     model: str | None = None,
     case_id: str | None = None,
     pack_id: str | None = None,
+    version_id: str | None = None,
 ) -> Run:
-    version = state.repo.latest_version(bot_id)
-    if version is None:
+    version = state.repo.get_version(version_id) if version_id else state.repo.latest_version(bot_id)
+    if version is None or version.bot_id != bot_id:
         raise ValueError("Bot not found.")
     cleaned = text.strip()
     if not cleaned:
@@ -225,6 +227,7 @@ def start_run(
     model: str | None = None,
     case_id: str | None = None,
     pack_id: str | None = None,
+    version_id: str | None = None,
 ) -> Run:
     run = open_run(
         state,
@@ -234,6 +237,7 @@ def start_run(
         model=model,
         case_id=case_id,
         pack_id=pack_id,
+        version_id=version_id,
     )
     return execute_run(state.repo, state.providers, state.packs, run.id)
 
@@ -328,6 +332,7 @@ def run_eval(
             model=chosen_model,
             case_id=case.id,
             pack_id=pack.id,
+            version_id=version.id,
         )
         results.append(
             {
@@ -340,6 +345,10 @@ def run_eval(
                 "tokens": run.prompt_tokens + run.completion_tokens,
                 "error": run.error,
                 "checks": run.checks,
+                "case_fingerprint": hashlib.sha256(json.dumps({"input": case.input, "expected": case.expected,
+                    "minimum_children": case.expect_min_children, "output_schema": version.output_schema,
+                    "require_delegation": version.require_delegation},
+                    sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest(),
             }
         )
     pass_count = sum(1 for item in results if item["passed"])
