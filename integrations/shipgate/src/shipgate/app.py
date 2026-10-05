@@ -4,7 +4,7 @@ import os
 from dataclasses import asdict
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Query
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -70,6 +70,14 @@ def create_app() -> FastAPI:
             "home.html",
             page_context(request, review=None, diff="", error=None, bot_id="change-lead", recent=app.state.store.recent_local()),
         )
+
+    @app.get("/history")
+    def review_history(request: Request, q: str = Query("", max_length=120),
+                       verdict: str = Query("all", pattern="^(all|ship|revise|block|unknown)$"),
+                       page: int = Query(1, ge=1, le=100000)):
+        history = app.state.store.history_local(q=q, verdict=verdict, page=page)
+        return templates.TemplateResponse(request, "history.html", page_context(
+            request, history=history, q=q, verdict=verdict, page=page))
 
     @app.post("/reviews")
     async def review_page(request: Request):

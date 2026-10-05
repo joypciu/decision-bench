@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Review history · Shipgate{% endblock %}
+{% block content %}
+<section class="panel">
+  <p class="eyebrow">SAVED REVIEWS</p><h1>Find a past decision.</h1>
+  <p>Search saved summaries and reopen complete reviews without running inference.</p>
+  <form class="history-filters" action="/history" method="get">
+    <label>Search summaries<input type="search" name="q" value="{{ q }}" maxlength="120" placeholder="Find words in a summary"></label>
+    <label>Verdict<select name="verdict" aria-label="Verdict">{% for option in ['all','ship','revise','block','unknown'] %}<option value="{{ option }}" {% if verdict == option %}selected{% endif %}>{{ 'All verdicts' if option == 'all' else option|capitalize }}</option>{% endfor %}</select></label>
+    <button class="primary" type="submit">Search reviews</button><a class="ghost" href="/history">Clear filters</a>
+  </form>
+  <p class="quiet">{{ history.total }} matching review{{ '' if history.total == 1 else 's' }} · Page {{ page }}. Search covers the saved summary, which is limited to 180 characters.</p>
+  <ul class="recent history-list">
+    {% for item in history.rows %}<li>
+      {% if item.available %}<a href="/reviews/{{ item.id }}"><strong>{{ item.verdict }}</strong> · Open review #{{ item.id }}</a>{% else %}<strong>{{ item.verdict }}</strong><span>Summary only · #{{ item.id }}</span>{% endif %}
+      <span>{{ jobs.get(item.bot_id, item.bot_id) }}</span><time datetime="{{ item.created_at }}">{{ item.created_at }} UTC</time><span class="quiet">{{ item.summary }}</span>
+    </li>{% else %}<li>No reviews match these filters.</li>{% endfor %}
+  </ul>
+  <nav class="history-pagination" aria-label="Review history pages">
+    {% if page > 1 %}<a class="ghost" href="{{ request.url.include_query_params(page=page-1) }}">Newer reviews</a>{% endif %}
+    {% if history.has_next %}<a class="ghost" href="{{ request.url.include_query_params(page=page+1) }}">Older reviews</a>{% endif %}
+    <a class="ghost" href="/">Review a new diff</a>
+  </nav>
+</section>
+{% endblock %}

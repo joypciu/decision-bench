@@ -77,3 +77,20 @@ class DeliveryStore:
         connection = sqlite3.connect(self.path)
         connection.row_factory = sqlite3.Row
         return connection
+
+    def history_local(self, *, q: str = "", verdict: str = "all", page: int = 1, limit: int = 20) -> dict:
+        clauses, params = [], []
+        if q.strip():
+            term = q.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            clauses.append("summary LIKE ? ESCAPE '\\'")
+            params.append(f"%{term}%")
+        if verdict != "all":
+            clauses.append("verdict = ?")
+            params.append(verdict)
+        where = " WHERE " + " AND ".join(clauses) if clauses else ""
+        with self._conn() as connection:
+            total = connection.execute("SELECT COUNT(*) FROM local_reviews" + where, params).fetchone()[0]
+            rows = connection.execute(
+                "SELECT id, bot_id, verdict, summary, created_at, payload IS NOT NULL AS available FROM local_reviews" + where +
+                " ORDER BY id DESC LIMIT ? OFFSET ?", [*params, limit, (page - 1) * limit]).fetchall()
+        return {"rows": [dict(row) for row in rows], "total": total, "has_next": page * limit < total}

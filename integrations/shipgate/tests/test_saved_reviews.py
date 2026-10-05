@@ -43,3 +43,31 @@ def test_saved_review_reopens_and_exports_without_inference(monkeypatch, tmp_pat
         assert client.get("/reviews/1/export").json() == exported.json()
         assert client.get("/reviews/999").status_code == 404
         assert client.get("/reviews/999/export").status_code == 404
+
+
+def test_history_search_pagination_and_legacy_records(monkeypatch, tmp_path):
+    monkeypatch.setenv("DECISION_BENCH_ROOT", str(Path(__file__).resolve().parents[3]))
+    monkeypatch.setenv("SHIPGATE_DATA", str(tmp_path))
+    monkeypatch.setenv("SHIPGATE_PROVIDER", "demo")
+    app = create_app()
+    store = app.state.store
+    store.add_local("change-lead", "block", "Rare 100%_match <script>literal</script>")
+    for i in range(21):
+        store.add_local("change-lead", "ship", f"Documentation {i}")
+    assert store.history_local()["has_next"]
+    assert len(store.history_local()["rows"]) == 20
+    assert len(store.history_local(page=2)["rows"]) == 2
+    for query in ("Rare", "%", "_", "100%_match"):
+        assert store.history_local(q=query)["total"] == 1
+    assert store.history_local(q="Rare", verdict="ship")["total"] == 0
+    assert store.history_local(q="' OR 1=1 --")["total"] == 0
+    with TestClient(app) as client:
+        assert "Older reviews" in client.get("/history").text
+        response = client.get("/history", params={"q": "Rare", "verdict": "block"})
+        assert "1 matching review" in response.text
+        assert "Summary only" in response.text
+        assert "&lt;script&gt;literal&lt;/script&gt;" in response.text
+        assert "No reviews match" in client.get("/history?q=missing").text
+        assert client.get("/history?page=0").status_code == 422
+        assert client.get("/history?verdict=invalid").status_code == 422
+        assert client.get("/history", params={"q": "x"*121}).status_code == 422

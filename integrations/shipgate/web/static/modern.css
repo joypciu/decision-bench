@@ -146,3 +146,14 @@ a:focus-visible {
 .recent li { flex-wrap: wrap; }
 .recent li .quiet { flex-basis: 100%; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
 .recent a { color: var(--ink); text-underline-offset: 3px; }
+.history-filters, .history-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+  margin: 20px 0;
+}
+.history-filters label { flex: 1 1 200px; min-width: 0; }
+.history-filters input { width: 100%; box-sizing: border-box; padding: 12px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
+.history-filters input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.history-list time { color: var(--muted); font-size: .85rem; }

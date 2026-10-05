@@ -4,6 +4,9 @@ Local reviews now have saved links and JSON downloads. Open a full review from
 **Recent reviews**, bookmark its URL, or download its verdict, risks, run ID, and
 original diff. Saved reviews survive server restarts and reopening does not rerun
 inference. Existing summary-only history is retained and marked **Summary only**.
+**Review history** opens a paginated view of all saved local reviews, with summary
+search and verdict filters. Search covers the stored summary (up to 180 characters),
+with literal `%` and `_` characters. Filter selections carry through page links.
 The local dashboard and saved-review routes use the same access model; use your
 deployment's access controls when sharing this service beyond your machine.
 
