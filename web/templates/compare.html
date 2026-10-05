@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Compare · Decision Bench{% endblock %}
+{% block content %}
+<header class="page-head"><div><p class="eyebrow">RUN COMPARISON</p><h1>See what changed.</h1><p class="lede">Compare decisions, execution costs, and evidence from two saved runs.</p></div></header>
+<form class="panel form" method="get" action="/compare">
+  <div class="split three">
+    {% for label, field, chosen in [('First run', 'left', left), ('Second run', 'right', right)] %}
+    <label><span>{{ label }}</span><select aria-label="{{ label }}" name="{{ field }}" required>
+      <option value="">Choose a run</option>
+      {% for run in runs %}<option value="{{ run.id }}" {% if run.id == chosen %}selected{% endif %}>{{ bot_names.get(run.bot_id, run.bot_id) }} · {{ run.output | decision or run.status }} · {{ run.created_at }} · {{ run.id[:8] }}</option>{% endfor %}
+      {% if chosen and chosen not in runs | map(attribute='id') | list %}<option value="{{ chosen }}" selected>{{ chosen }}</option>{% endif %}
+    </select></label>
+    {% endfor %}
+    <div class="start-submit"><button class="button" type="submit">Compare runs</button></div>
+  </div>
+</form>
+{% if selected[0] and selected[1] %}
+{% set first = selected[0].run %}{% set second = selected[1].run %}
+{% if first.id == second.id %}<p class="banner">You selected the same run twice. Choose a different second run to find changes.</p>{% endif %}
+{% if first.input_text != second.input_text %}<p class="banner">These runs use different case inputs. Differences may come from the case as well as the bot or provider.</p>{% endif %}
+{% if first.status == 'running' or second.status == 'running' %}<p class="banner">A selected run is still running. Refresh after it finishes for complete results.</p>{% endif %}
+<section class="panel comparison"><h2>Decision and execution</h2>
+  <table><thead><tr><th>Measure</th><th>First run</th><th>Second run</th></tr></thead><tbody>
+  {% for label, a, b in [
+    ('Decision', first.output | decision or '—', second.output | decision or '—'),
+    ('Status', first.status, second.status), ('Bot', selected[0].bot_name, selected[1].bot_name),
+    ('Bot version', first.bot_version_id, second.bot_version_id), ('Provider', first.provider, second.provider),
+    ('Model', first.model, second.model), ('Score', first.score, second.score),
+    ('Latency (ms)', first.latency_ms, second.latency_ms),
+    ('Tokens', first.prompt_tokens + first.completion_tokens, second.prompt_tokens + second.completion_tokens),
+    ('Specialists', selected[0].children | length, selected[1].children | length)] %}
+    <tr {% if a != b %}class="comparison-changed"{% endif %}><th scope="row">{{ label }}{% if a != b %} <span class="pill">Changed</span>{% endif %}</th><td>{{ a }}</td><td>{{ b }}</td></tr>
+  {% endfor %}
+  </tbody></table>
+  <p class="hint">Timing and token counts describe each lead run. Specialist usage is available in the individual run reports. Scores depend on the selected checks; compare equivalent cases for meaningful quality judgments.</p>
+</section>
+<section class="grid two">
+  {% for node in selected %}<article class="panel comparison-detail"><p class="label">{{ 'First run' if loop.first else 'Second run' }}</p><h2>{{ node.run.output | decision or node.run.status }}</h2>
+    <p>{{ node.run.output | summary or 'No summary returned.' }}</p>
+    <div class="row-actions"><a class="button ghost" href="/runs/{{ node.run.id }}">Open full trace</a><a class="button ghost" href="/api/runs/{{ node.run.id }}/export">Download report</a></div>
+    {% if node.run.error %}<p class="banner">{{ node.run.error }}</p>{% endif %}
+    <h3>Specialist results</h3><ul>{% for child in node.children %}<li><a href="/runs/{{ child.run.id }}">{{ child.bot_name }}</a> · {{ child.run.output | decision or child.run.status }}</li>{% else %}<li>No specialist runs.</li>{% endfor %}</ul>
+    <details><summary>Case input</summary><pre>{{ node.run.input_text }}</pre></details>
+    <details><summary>Raw output</summary><pre>{{ node.run.output | pretty }}</pre></details>
+  </article>{% endfor %}
+</section>
+{% else %}<p class="empty">Choose two saved runs to compare their results. Create reviews on the Runs page if this list is empty.</p>{% endif %}
+{% endblock %}

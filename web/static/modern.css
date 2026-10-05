@@ -435,3 +435,9 @@ button:focus-visible {
     transition: none !important;
   }
 }
+:root { --comparison-highlight: #eef2ff; }
+[data-theme="dark"] { --comparison-highlight: #232b4a; }
+.comparison-changed { background: var(--comparison-highlight); }
+.comparison table { table-layout: fixed; width: 100%; }
+.comparison td, .comparison th { overflow-wrap: anywhere; }
+.comparison-detail pre { white-space: pre-wrap; overflow-wrap: anywhere; }

@@ -126,6 +126,18 @@ def register_routes(app: FastAPI) -> None:
             rows.append({"bot": bot, "version": version})
         return render(request, "bots.html", active="bots", rows=rows)
 
+    @app.get("/compare")
+    def compare_runs(request: Request, left: str = "", right: str = ""):
+        state = work(request.app)
+        selected = []
+        for run_id in (left, right):
+            node = run_tree(state, run_id) if run_id else None
+            if run_id and node is None:
+                raise HTTPException(404, "Run not found.")
+            selected.append(node)
+        return render(request, "compare.html", active="compare", runs=state.repo.list_root_runs(100),
+                      left=left, right=right, selected=selected, bot_names=bot_name_map(state))
+
     @app.get("/bots/new")
     def new_bot_page(request: Request):
         state = work(request.app)

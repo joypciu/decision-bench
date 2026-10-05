@@ -19,7 +19,7 @@
     <h1 class="decision {{ verdict or '' }}">{{ verdict or ('Working' if node.run.status == 'running' else node.run.status) }}</h1>
     <p class="lede">{{ node.run.latency_ms }} ms · {{ node.run.prompt_tokens + node.run.completion_tokens }} tokens · score {{ node.run.score }}</p>
   </div>
-  <div class="row-actions"><a class="button ghost" href="/api/runs/{{ node.run.id }}/export">Download report ↓</a><span class="pill {{ node.run.status }}">{{ node.run.status }}</span></div>
+  <div class="row-actions"><a class="button ghost" href="/compare?left={{ node.run.id }}">Compare run</a><a class="button ghost" href="/api/runs/{{ node.run.id }}/export">Download report ↓</a><span class="pill {{ node.run.status }}">{{ node.run.status }}</span></div>
 </header>
 {% if node.run.output | summary %}<p class="summary">{{ node.run.output | summary }}</p>{% endif %}
 {% if node.run.error %}<p class="banner">{{ node.run.error }}</p>{% endif %}

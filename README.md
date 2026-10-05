@@ -1,5 +1,15 @@
 # Decision Bench
 
+Open **Compare** to compare two saved runs side by side: decisions, bot versions,
+providers/models, scores, lead-run token usage and timing, plus specialist results.
+Changed values are highlighted. Different case inputs and same-run selections
+show explicit notices; the comparison URL can be bookmarked.
+
+Browser verification: install `playwright`, run `python -m playwright install chromium`,
+then `python e2e/browser_runs.py`. It uses a temporary database and demo inference,
+creates reviews through the UI, compares them, checks report download actions and
+HTTP payloads, and verifies reload/mobile/theme behavior. GitHub CI runs this test.
+
 The refreshed workspace includes light/dark themes, sample cases, searchable
 history (the latest 100 root runs), status filters, and JSON report downloads.
 Press `/` to focus run search. A run's **Download report** exports its decision,

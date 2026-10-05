@@ -19,3 +19,13 @@ jobs:
           pytest
           pytest --import-mode=importlib integrations/shipgate/tests
       - run: node --check web/static/app.js
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e . playwright==1.63.0
+      - run: python -m playwright install --with-deps chromium
+      - run: python e2e/browser_runs.py
